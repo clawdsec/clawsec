@@ -24,3 +24,21 @@ export {
   resetGlobalFeedbackStore,
   createFeedbackStore,
 } from './store.js';
+
+// Learner exports
+export type {
+  PatternWeight,
+  LearnerStats,
+  WeightStore,
+  Learner,
+} from './learner.js';
+
+export {
+  FileWeightStore,
+  PatternLearner,
+  getLearner,
+  getWeightStore,
+  resetGlobalLearner,
+  createLearner,
+  createWeightStore,
+} from './learner.js';
