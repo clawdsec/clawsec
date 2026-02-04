@@ -33,12 +33,12 @@ function createMockAPI(configOverrides: Partial<PluginConfig> = {}): OpenClawPlu
     unregisterHook: vi.fn((hookName: string, _handlerId: string) => {
       registeredHooks.delete(hookName);
     }),
-    getConfig: vi.fn(() => ({
+    config: {
       configPath: './clawsec.yaml',
       enabled: true,
       logLevel: 'info' as const,
       ...configOverrides,
-    })),
+    },
     log: vi.fn(),
     requestApproval: vi.fn().mockResolvedValue({
       approved: true,
@@ -162,10 +162,11 @@ describe('Clawsec Plugin', () => {
 
     it('retrieves configuration from API', () => {
       const api = createMockAPI();
-      
+
       activate(api);
-      
-      expect(api.getConfig).toHaveBeenCalled();
+
+      const state = getState();
+      expect(state.config).toEqual(api.config);
     });
 
     it('logs activation message', () => {
@@ -175,7 +176,8 @@ describe('Clawsec Plugin', () => {
       
       expect(api.log).toHaveBeenCalledWith(
         'info',
-        expect.stringContaining('Activating Clawsec Security Plugin')
+        'Activating Clawsec Security Plugin v1.0.0',
+        undefined
       );
     });
 
@@ -186,7 +188,8 @@ describe('Clawsec Plugin', () => {
       
       expect(api.log).toHaveBeenCalledWith(
         'info',
-        '[clawsec] All hooks registered successfully'
+        'All hooks registered successfully',
+        undefined
       );
     });
 
@@ -254,7 +257,8 @@ describe('Clawsec Plugin', () => {
       
       expect(api.log).toHaveBeenCalledWith(
         'warn',
-        '[clawsec] Plugin already activated, skipping'
+        'Plugin already activated, skipping',
+        undefined
       );
       // registerHook should only be called 3 times (not 6)
       expect(api.registerHook).toHaveBeenCalledTimes(3);
@@ -268,7 +272,8 @@ describe('Clawsec Plugin', () => {
       expect(api.registerHook).not.toHaveBeenCalled();
       expect(api.log).toHaveBeenCalledWith(
         'info',
-        '[clawsec] Plugin is disabled via configuration'
+        'Plugin is disabled via configuration',
+        undefined
       );
     });
 
@@ -333,11 +338,13 @@ describe('Clawsec Plugin', () => {
       
       expect(api.log).toHaveBeenCalledWith(
         'info',
-        '[clawsec] Deactivating Clawsec Security Plugin'
+        'Deactivating Clawsec Security Plugin',
+        undefined
       );
       expect(api.log).toHaveBeenCalledWith(
         'info',
-        '[clawsec] All hooks unregistered'
+        'All hooks unregistered',
+        undefined
       );
     });
 
@@ -476,7 +483,7 @@ describe('Clawsec Plugin', () => {
         
         expect(api.log).toHaveBeenCalledWith(
           'debug',
-          '[clawsec] before-tool-call: test-tool',
+          'before-tool-call: test-tool',
           expect.objectContaining({
             sessionId: context.sessionId,
           })
@@ -535,7 +542,7 @@ describe('Clawsec Plugin', () => {
         
         expect(api.log).toHaveBeenCalledWith(
           'debug',
-          '[clawsec] before-agent-start',
+          'before-agent-start',
           expect.objectContaining({
             sessionId: context.sessionId,
           })
@@ -575,7 +582,7 @@ describe('Clawsec Plugin', () => {
         
         expect(api.log).toHaveBeenCalledWith(
           'debug',
-          '[clawsec] tool-result-persist: test-tool',
+          'tool-result-persist: test-tool',
           expect.objectContaining({
             sessionId: context.sessionId,
           })

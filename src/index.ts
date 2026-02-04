@@ -11,6 +11,9 @@ export const VERSION = '1.0.0';
 export const PLUGIN_ID = 'clawsec';
 export const PLUGIN_NAME = 'Clawsec Security Plugin';
 
+// Logger utility for safe API logging with fallback
+import { createLogger, createNoOpLogger, type Logger } from './utils/logger.js';
+
 // =============================================================================
 // TYPE DEFINITIONS
 // =============================================================================
@@ -141,8 +144,8 @@ export interface OpenClawPluginAPI {
   registerHook: (hookName: string, handler: unknown, options?: HookOptions) => void;
   /** Unregister a hook handler */
   unregisterHook: (hookName: string, handlerId: string) => void;
-  /** Get plugin configuration */
-  getConfig: () => PluginConfig;
+  /** Plugin configuration */
+  config: PluginConfig;
   /** Log a message */
   log: (level: 'debug' | 'info' | 'warn' | 'error', message: string, data?: unknown) => void;
   /** Request user approval */
@@ -203,6 +206,7 @@ interface PluginState {
   api: OpenClawPluginAPI | null;
   config: PluginConfig | null;
   initialized: boolean;
+  logger: Logger;
   handlers: {
     beforeToolCall: BeforeToolCallHandler | null;
     beforeAgentStart: BeforeAgentStartHandler | null;
@@ -214,6 +218,7 @@ const state: PluginState = {
   api: null,
   config: null,
   initialized: false,
+  logger: createNoOpLogger(),
   handlers: {
     beforeToolCall: null,
     beforeAgentStart: null,
@@ -233,12 +238,10 @@ const beforeToolCallHandler: BeforeToolCallHandler = async (
   context: ToolCallContext
 ): Promise<BeforeToolCallResult> => {
   // Log for debugging during development
-  if (state.api && state.config?.logLevel === 'debug') {
-    state.api.log('debug', `[clawsec] before-tool-call: ${context.toolName}`, {
-      sessionId: context.sessionId,
-      toolInput: context.toolInput,
-    });
-  }
+  state.logger.debug(`before-tool-call: ${context.toolName}`, {
+    sessionId: context.sessionId,
+    toolInput: context.toolInput,
+  });
 
   // Placeholder: Allow all tool calls
   // TODO: Implement actual detection logic in Task 2.x
@@ -255,11 +258,9 @@ const beforeAgentStartHandler: BeforeAgentStartHandler = async (
   context: AgentStartContext
 ): Promise<BeforeAgentStartResult> => {
   // Log for debugging during development
-  if (state.api && state.config?.logLevel === 'debug') {
-    state.api.log('debug', '[clawsec] before-agent-start', {
-      sessionId: context.sessionId,
-    });
-  }
+  state.logger.debug('before-agent-start', {
+    sessionId: context.sessionId,
+  });
 
   // Placeholder: Inject basic security reminder into system prompt
   // TODO: Implement configurable prompts in Task 2.x
@@ -284,11 +285,9 @@ const toolResultPersistHandler: ToolResultPersistHandler = async (
   context: ToolResultContext
 ): Promise<ToolResultPersistResult> => {
   // Log for debugging during development
-  if (state.api && state.config?.logLevel === 'debug') {
-    state.api.log('debug', `[clawsec] tool-result-persist: ${context.toolName}`, {
-      sessionId: context.sessionId,
-    });
-  }
+  state.logger.debug(`tool-result-persist: ${context.toolName}`, {
+    sessionId: context.sessionId,
+  });
 
   // Placeholder: Allow all results to persist
   // TODO: Implement actual filtering logic in Task 2.x
@@ -309,19 +308,20 @@ const toolResultPersistHandler: ToolResultPersistHandler = async (
  */
 export function activate(api: OpenClawPluginAPI): () => void {
   if (state.initialized) {
-    api.log('warn', '[clawsec] Plugin already activated, skipping');
+    state.logger.warn('Plugin already activated, skipping');
     return () => deactivate();
   }
 
   // Store API reference and config
   state.api = api;
-  state.config = api.getConfig();
+  state.config = api.config;
+  state.logger = createLogger(api, state.config);
 
-  api.log('info', `[clawsec] Activating Clawsec Security Plugin v${VERSION}`);
+  state.logger.info(`Activating Clawsec Security Plugin v${VERSION}`);
 
   // Check if plugin is enabled
   if (state.config?.enabled === false) {
-    api.log('info', '[clawsec] Plugin is disabled via configuration');
+    state.logger.info('Plugin is disabled via configuration');
     state.initialized = true;
     return () => deactivate();
   }
@@ -351,7 +351,7 @@ export function activate(api: OpenClawPluginAPI): () => void {
   });
 
   state.initialized = true;
-  api.log('info', '[clawsec] All hooks registered successfully');
+  state.logger.info('All hooks registered successfully');
 
   // Return cleanup function
   return () => deactivate();
@@ -367,20 +367,21 @@ export function deactivate(): void {
 
   const api = state.api;
   if (api) {
-    api.log('info', '[clawsec] Deactivating Clawsec Security Plugin');
+    state.logger.info('Deactivating Clawsec Security Plugin');
 
     // Unregister all hooks
     api.unregisterHook('before-tool-call', 'clawsec-before-tool-call');
     api.unregisterHook('before-agent-start', 'clawsec-before-agent-start');
     api.unregisterHook('tool-result-persist', 'clawsec-tool-result-persist');
 
-    api.log('info', '[clawsec] All hooks unregistered');
+    state.logger.info('All hooks unregistered');
   }
 
   // Reset state
   state.api = null;
   state.config = null;
   state.initialized = false;
+  state.logger = createNoOpLogger();
   state.handlers.beforeToolCall = null;
   state.handlers.beforeAgentStart = null;
   state.handlers.toolResultPersist = null;
