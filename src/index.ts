@@ -156,6 +156,8 @@ export interface OpenClawPluginAPI {
  * Hook registration options
  */
 export interface HookOptions {
+  /** Display name for this hook handler */
+  name?: string;
   /** Unique identifier for this handler */
   id?: string;
   /** Priority (lower runs first) */
@@ -333,18 +335,21 @@ export function activate(api: OpenClawPluginAPI): () => void {
 
   // Register hooks with OpenClaw
   api.registerHook('before-tool-call', beforeToolCallHandler, {
+    name: 'before-tool-call',
     id: 'clawsec-before-tool-call',
     priority: 100,
     enabled: true,
   });
 
   api.registerHook('before-agent-start', beforeAgentStartHandler, {
+    name: 'before-agent-start',
     id: 'clawsec-before-agent-start',
     priority: 50,
     enabled: true,
   });
 
   api.registerHook('tool-result-persist', toolResultPersistHandler, {
+    name: 'tool-result-persist',
     id: 'clawsec-tool-result-persist',
     priority: 100,
     enabled: true,
