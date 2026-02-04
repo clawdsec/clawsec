@@ -28,3 +28,6 @@ npm-debug.log*
 
 # Clawsec local data
 .clawsec/
+
+# Serena
+.serena/
