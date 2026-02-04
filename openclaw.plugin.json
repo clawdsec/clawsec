@@ -1,0 +1,99 @@
+{
+  "$schema": "https://openclaw.ai/schemas/plugin.json",
+  "id": "clawsec",
+  "name": "Clawsec Security Plugin",
+  "version": "1.0.0",
+  "description": "Comprehensive security plugin for OpenClaw.ai that prevents AI agents from taking dangerous actions. Provides purchase protection, website control, destructive command prevention, and sensitive data filtering.",
+  "author": "Clawsec Team",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/clawsec/clawsec"
+  },
+  "keywords": [
+    "security",
+    "ai-safety",
+    "protection",
+    "purchase-protection",
+    "destructive-commands",
+    "data-filtering"
+  ],
+  "engines": {
+    "openclaw": ">=1.0.0",
+    "node": ">=18.0.0"
+  },
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "hooks": {
+    "before-tool-call": {
+      "id": "clawsec-before-tool-call",
+      "description": "Intercepts tool calls to detect and block dangerous actions before execution",
+      "priority": 100,
+      "handler": "dist/index.js:beforeToolCallHandler"
+    },
+    "before-agent-start": {
+      "id": "clawsec-before-agent-start",
+      "description": "Injects security context and reminders into the agent's system prompt",
+      "priority": 50,
+      "handler": "dist/index.js:beforeAgentStartHandler"
+    },
+    "tool-result-persist": {
+      "id": "clawsec-tool-result-persist",
+      "description": "Filters sensitive data from tool outputs before persisting to conversation history",
+      "priority": 100,
+      "handler": "dist/index.js:toolResultPersistHandler"
+    }
+  },
+  "configuration": {
+    "schema": {
+      "type": "object",
+      "properties": {
+        "configPath": {
+          "type": "string",
+          "default": "./clawsec.yaml",
+          "description": "Path to the Clawsec YAML configuration file"
+        },
+        "enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Whether the security plugin is enabled"
+        },
+        "logLevel": {
+          "type": "string",
+          "enum": ["debug", "info", "warn", "error"],
+          "default": "info",
+          "description": "Logging verbosity level"
+        }
+      },
+      "additionalProperties": false
+    },
+    "externalConfigFile": {
+      "format": "yaml",
+      "filename": "clawsec.yaml",
+      "schemaRef": "./schemas/clawsec-config.schema.json"
+    }
+  },
+  "capabilities": {
+    "requiresApprovalAPI": true,
+    "requiresLogging": true,
+    "requiresConversationAccess": false,
+    "requiresNetworkAccess": false
+  },
+  "categories": [
+    "security",
+    "safety",
+    "compliance"
+  ],
+  "permissions": [
+    "hook:before-tool-call",
+    "hook:before-agent-start",
+    "hook:tool-result-persist",
+    "api:approval",
+    "api:logging"
+  ],
+  "documentation": {
+    "readme": "README.md",
+    "changelog": "CHANGELOG.md",
+    "configuration": "docs/configuration.md"
+  }
+}
