@@ -20,6 +20,8 @@ import type {
   ToolCallContext,
   ThreatCategory,
   DetectionCache,
+  LLMClient,
+  LLMAnalysisResult,
 } from './types.js';
 import { compareSeverity } from './types.js';
 import { createCache, createNoOpCache, generateCacheKey, DEFAULT_CACHE_TTL_MS } from './cache.js';
@@ -154,6 +156,7 @@ export class HybridAnalyzer implements Analyzer {
   private cache: DetectionCache;
   private cacheEnabled: boolean;
   private cacheTtlMs: number;
+  private llmClient?: LLMClient;
 
   // Detectors
   private purchaseDetector: PurchaseDetector;
@@ -166,6 +169,7 @@ export class HybridAnalyzer implements Analyzer {
     this.config = analyzerConfig.config;
     this.cacheEnabled = analyzerConfig.enableCache ?? true;
     this.cacheTtlMs = analyzerConfig.cacheTtlMs ?? DEFAULT_CACHE_TTL_MS;
+    this.llmClient = analyzerConfig.llmClient;
     
     // Initialize cache
     this.cache = this.cacheEnabled
@@ -243,7 +247,20 @@ export class HybridAnalyzer implements Analyzer {
     const sortedDetections = sortDetections(detections);
 
     // Determine action based on highest severity detection
-    const { action, requiresLLM } = determineAction(sortedDetections, this.config);
+    let { action, requiresLLM } = determineAction(sortedDetections, this.config);
+
+    // If LLM analysis is needed and we have an LLM client, perform analysis
+    let llmResult: LLMAnalysisResult | undefined;
+    if (requiresLLM && this.llmClient && this.llmClient.isAvailable() && sortedDetections[0]) {
+      llmResult = await this.performLLMAnalysis(sortedDetections[0], context);
+      
+      // Adjust action based on LLM result
+      const adjustedAction = this.adjustActionFromLLM(action, llmResult);
+      action = adjustedAction;
+      
+      // LLM has made its determination, no longer needs LLM
+      requiresLLM = false;
+    }
 
     // Build result
     const result: AnalysisResult = {
@@ -255,7 +272,7 @@ export class HybridAnalyzer implements Analyzer {
       durationMs: Date.now() - startTime,
     };
 
-    // Cache the result (unless it requires LLM - those shouldn't be cached)
+    // Cache the result (unless it still requires LLM - those shouldn't be cached)
     if (this.cacheEnabled && !requiresLLM) {
       this.cache.set(cacheKey, result);
     }
@@ -362,6 +379,51 @@ export class HybridAnalyzer implements Analyzer {
       reason: `${category} detection disabled`,
     };
   }
+
+  /**
+   * Perform LLM analysis on an ambiguous detection
+   */
+  private async performLLMAnalysis(
+    detection: Detection,
+    context: ToolCallContext
+  ): Promise<LLMAnalysisResult> {
+    try {
+      return await this.llmClient!.analyze({
+        detection,
+        context,
+      });
+    } catch {
+      // Return uncertain on error - don't block the flow
+      return {
+        determination: 'uncertain',
+        confidence: 0.5,
+        reasoning: 'LLM analysis failed',
+        suggestedAction: 'confirm',
+      };
+    }
+  }
+
+  /**
+   * Adjust the action based on LLM analysis result
+   */
+  private adjustActionFromLLM(
+    currentAction: AnalysisAction,
+    llmResult: LLMAnalysisResult
+  ): AnalysisAction {
+    // Map LLM suggested action to AnalysisAction
+    switch (llmResult.suggestedAction) {
+      case 'block':
+        return 'block';
+      case 'allow':
+        // Only allow if LLM is confident it's safe
+        return llmResult.confidence >= 0.7 ? 'allow' : 'warn';
+      case 'confirm':
+        return 'confirm';
+      default:
+        // Fall back to original action if LLM result is unexpected
+        return currentAction;
+    }
+  }
 }
 
 /**
@@ -372,6 +434,7 @@ export function createAnalyzer(config: ClawsecConfig, options?: Partial<Analyzer
     config,
     enableCache: options?.enableCache,
     cacheTtlMs: options?.cacheTtlMs,
+    llmClient: options?.llmClient,
   });
 }
 

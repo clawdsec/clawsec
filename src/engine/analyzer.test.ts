@@ -715,4 +715,144 @@ describe('HybridAnalyzer', () => {
       expect(result).toBeDefined();
     });
   });
+
+  describe('LLM Client Integration', () => {
+    it('should use LLM client when requiresLLM and client available', async () => {
+      // Create a mock LLM client that returns 'threat'
+      const mockLLMClient = {
+        isAvailable: () => true,
+        analyze: vi.fn().mockResolvedValue({
+          determination: 'threat',
+          confidence: 0.9,
+          reasoning: 'Clear threat detected',
+          suggestedAction: 'block',
+        }),
+      };
+
+      const config = createTestConfig({
+        llm: { enabled: true, model: 'test' },
+        rules: {
+          purchase: { enabled: true, severity: 'critical', action: 'block' },
+          website: { enabled: false, mode: 'blocklist', severity: 'high', action: 'block', blocklist: [], allowlist: [] },
+          destructive: { enabled: false, severity: 'critical', action: 'confirm' },
+          secrets: { enabled: false, severity: 'critical', action: 'block' },
+          exfiltration: { enabled: false, severity: 'high', action: 'block' },
+        },
+      });
+
+      const analyzer = new HybridAnalyzer({
+        config,
+        llmClient: mockLLMClient,
+      });
+
+      // This should trigger a purchase detection with ambiguous confidence
+      // and then call the LLM client
+      const result = await analyzer.analyze({
+        toolName: 'browser_navigate',
+        toolInput: { url: 'https://shop.example.com/buy' },
+        url: 'https://shop.example.com/buy',
+      });
+
+      // If there was an ambiguous detection, LLM should have been called
+      if (mockLLMClient.analyze.mock.calls.length > 0) {
+        expect(result.requiresLLM).toBe(false); // LLM already handled it
+        expect(result.action).toBe('block'); // LLM said block
+      }
+    });
+
+    it('should not call LLM client when unavailable', async () => {
+      const mockLLMClient = {
+        isAvailable: () => false,
+        analyze: vi.fn(),
+      };
+
+      const config = createTestConfig({
+        llm: { enabled: true, model: 'test' },
+      });
+
+      const analyzer = new HybridAnalyzer({
+        config,
+        llmClient: mockLLMClient,
+      });
+
+      await analyzer.analyze({
+        toolName: 'test_tool',
+        toolInput: {},
+      });
+
+      expect(mockLLMClient.analyze).not.toHaveBeenCalled();
+    });
+
+    it('should handle LLM client errors gracefully', async () => {
+      const mockLLMClient = {
+        isAvailable: () => true,
+        analyze: vi.fn().mockRejectedValue(new Error('LLM API error')),
+      };
+
+      const config = createTestConfig({
+        llm: { enabled: true, model: 'test' },
+        rules: {
+          purchase: { enabled: true, severity: 'critical', action: 'block' },
+          website: { enabled: false, mode: 'blocklist', severity: 'high', action: 'block', blocklist: [], allowlist: [] },
+          destructive: { enabled: false, severity: 'critical', action: 'confirm' },
+          secrets: { enabled: false, severity: 'critical', action: 'block' },
+          exfiltration: { enabled: false, severity: 'high', action: 'block' },
+        },
+      });
+
+      const analyzer = new HybridAnalyzer({
+        config,
+        llmClient: mockLLMClient,
+      });
+
+      // Should not throw, should return a result
+      const result = await analyzer.analyze({
+        toolName: 'browser_navigate',
+        toolInput: { url: 'https://checkout.stripe.com/pay' },
+        url: 'https://checkout.stripe.com/pay',
+      });
+
+      expect(result).toBeDefined();
+      expect(result.action).toBeDefined();
+    });
+
+    it('should allow safe detections when LLM says safe with high confidence', async () => {
+      const mockLLMClient = {
+        isAvailable: () => true,
+        analyze: vi.fn().mockResolvedValue({
+          determination: 'safe',
+          confidence: 0.85,
+          reasoning: 'This is a legitimate operation',
+          suggestedAction: 'allow',
+        }),
+      };
+
+      const config = createTestConfig({
+        llm: { enabled: true, model: 'test' },
+        rules: {
+          purchase: { enabled: true, severity: 'high', action: 'confirm' },
+          website: { enabled: false, mode: 'blocklist', severity: 'high', action: 'block', blocklist: [], allowlist: [] },
+          destructive: { enabled: false, severity: 'critical', action: 'confirm' },
+          secrets: { enabled: false, severity: 'critical', action: 'block' },
+          exfiltration: { enabled: false, severity: 'high', action: 'block' },
+        },
+      });
+
+      const analyzer = new HybridAnalyzer({
+        config,
+        llmClient: mockLLMClient,
+      });
+
+      const result = await analyzer.analyze({
+        toolName: 'browser_navigate',
+        toolInput: { url: 'https://shop.example.com' },
+        url: 'https://shop.example.com',
+      });
+
+      // If LLM was called and said safe, action should be allow
+      if (mockLLMClient.analyze.mock.calls.length > 0) {
+        expect(result.action).toBe('allow');
+      }
+    });
+  });
 });

@@ -37,3 +37,27 @@ export {
   createAnalyzer,
   createDefaultAnalyzer,
 } from './analyzer.js';
+
+// LLM Client
+export type {
+  ConversationMessage,
+  LLMAnalysisRequest,
+  LLMAnalysisResult,
+  LLMClient,
+  OpenClawAPI,
+  LLMClientConfig,
+} from './llm-client.js';
+
+export {
+  DEFAULT_LLM_TIMEOUT_MS,
+  DEFAULT_LLM_CACHE_TTL_MS,
+  MAX_LLM_CACHE_SIZE,
+  LLMResponseCache,
+  buildAnalysisPrompt,
+  parseAnalysisResponse,
+  OpenClawLLMClient,
+  MockLLMClient,
+  createLLMClient,
+  createMockLLMClient,
+  createUnavailableLLMClient,
+} from './llm-client.js';

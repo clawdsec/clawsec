@@ -109,6 +109,52 @@ export interface AnalyzerConfig {
   enableCache?: boolean;
   /** Cache TTL in milliseconds (default: 5 minutes) */
   cacheTtlMs?: number;
+  /** Optional LLM client for analyzing ambiguous detections */
+  llmClient?: LLMClient;
+}
+
+/**
+ * LLM analysis result determination
+ */
+export type LLMDetermination = 'threat' | 'safe' | 'uncertain';
+
+/**
+ * LLM analysis suggested action
+ */
+export type LLMSuggestedAction = 'block' | 'confirm' | 'allow';
+
+/**
+ * Result of LLM analysis
+ */
+export interface LLMAnalysisResult {
+  /** Determination of the threat level */
+  determination: LLMDetermination;
+  /** Confidence in the determination (0-1) */
+  confidence: number;
+  /** Reasoning behind the determination */
+  reasoning: string;
+  /** Suggested action based on analysis */
+  suggestedAction: LLMSuggestedAction;
+}
+
+/**
+ * Request to analyze a detection with LLM
+ */
+export interface LLMAnalysisRequest {
+  /** The detection to analyze */
+  detection: Detection;
+  /** Context of the tool call that triggered the detection */
+  context: ToolCallContext;
+}
+
+/**
+ * Interface for LLM clients (minimal for avoiding circular deps)
+ */
+export interface LLMClient {
+  /** Analyze a detection and determine if it's a real threat */
+  analyze(request: LLMAnalysisRequest): Promise<LLMAnalysisResult>;
+  /** Check if the LLM client is available and configured */
+  isAvailable(): boolean;
 }
 
 /**
