@@ -1,0 +1,200 @@
+# Clawsec Configuration Example
+# Copy this file to clawsec.yaml and customize for your project
+
+version: "1.0"
+
+# =============================================================================
+# GLOBAL SETTINGS
+# =============================================================================
+
+global:
+  # Enable or disable the entire plugin
+  enabled: true
+
+  # Log level: debug, info, warn, error
+  logLevel: info
+
+# =============================================================================
+# LLM SETTINGS
+# =============================================================================
+
+llm:
+  # Enable LLM-based detection for ambiguous cases
+  enabled: true
+
+  # Model to use (null = use OpenClaw's configured model)
+  model: null
+
+# =============================================================================
+# SECURITY RULES
+# =============================================================================
+
+rules:
+  # ---------------------------------------------------------------------------
+  # Purchase Protection
+  # ---------------------------------------------------------------------------
+  purchase:
+    enabled: true
+    severity: critical    # critical, high, medium, low
+    action: block         # block, confirm, warn, log
+
+    # Spending limits
+    spendLimits:
+      perTransaction: 100
+      daily: 500
+
+    # Domain filtering
+    domains:
+      mode: blocklist     # blocklist or allowlist
+      blocklist:
+        - "*.amazon.com"
+        - "*.stripe.com"
+        - "paypal.com"
+        - "checkout.*"
+
+  # ---------------------------------------------------------------------------
+  # Website Control
+  # ---------------------------------------------------------------------------
+  website:
+    enabled: true
+    mode: blocklist       # blocklist or allowlist
+    severity: high
+    action: block
+
+    # Blocked domains (supports glob patterns)
+    blocklist:
+      - "*.malware.com"
+      - "phishing-*.com"
+      - "*.darkweb.*"
+
+    # Allowed domains (for allowlist mode)
+    allowlist:
+      - "github.com"
+      - "stackoverflow.com"
+      - "docs.openclaw.ai"
+      - "developer.mozilla.org"
+
+  # ---------------------------------------------------------------------------
+  # Destructive Commands
+  # ---------------------------------------------------------------------------
+  destructive:
+    enabled: true
+    severity: critical
+    action: confirm       # Require approval instead of blocking
+
+    # Shell command protection
+    shell:
+      enabled: true
+      # Patterns: rm -rf, mkfs, dd, DROP TABLE, TRUNCATE, etc.
+
+    # Cloud operation protection
+    cloud:
+      enabled: true
+      # Patterns: aws delete, gcloud delete, kubectl delete, terraform destroy
+
+    # Code pattern protection
+    code:
+      enabled: true
+      # Patterns: shutil.rmtree, fs.rm(recursive), os.RemoveAll
+
+  # ---------------------------------------------------------------------------
+  # Secrets/PII Detection
+  # ---------------------------------------------------------------------------
+  secrets:
+    enabled: true
+    severity: critical
+    action: block
+    # Detects: API keys, tokens, passwords, SSNs, credit cards, etc.
+
+  # ---------------------------------------------------------------------------
+  # Data Exfiltration Detection
+  # ---------------------------------------------------------------------------
+  exfiltration:
+    enabled: true
+    severity: high
+    action: block
+    # Detects: curl POST, wget uploads, cloud uploads, netcat, etc.
+
+  # ---------------------------------------------------------------------------
+  # Output Sanitization (Prompt Injection)
+  # ---------------------------------------------------------------------------
+  sanitization:
+    enabled: true
+    severity: high
+    action: block
+
+    # Minimum confidence threshold (0.0 - 1.0)
+    minConfidence: 0.5
+
+    # Redact instead of blocking (set to true for softer approach)
+    redactMatches: false
+
+    # Detection categories
+    categories:
+      instructionOverride: true   # "ignore previous instructions"
+      systemLeak: true            # "reveal your system prompt"
+      jailbreak: true             # "DAN mode", "developer mode"
+      encodedPayload: true        # Base64, hex, unicode escapes
+
+# =============================================================================
+# APPROVAL SETTINGS
+# =============================================================================
+
+approval:
+  # Native OpenClaw approval (/approve command)
+  native:
+    enabled: true
+    timeout: 300          # 5 minutes
+
+  # Agent-confirm (retry with confirmation parameter)
+  agentConfirm:
+    enabled: true
+    parameterName: "_clawsec_confirm"
+
+  # Webhook approval (external system)
+  webhook:
+    enabled: false
+    url: "https://api.example.com/clawsec/approve"
+    timeout: 30
+    headers:
+      Authorization: "Bearer ${CLAWSEC_WEBHOOK_TOKEN}"
+
+# =============================================================================
+# NOTIFICATIONS (Optional)
+# =============================================================================
+
+# notifications:
+#   slack:
+#     enabled: true
+#     webhookUrl: "${SLACK_WEBHOOK_URL}"
+#     channel: "#security-alerts"
+#     username: "Clawsec"
+#     iconEmoji: ":shield:"
+#     minSeverity: high
+#     categories:
+#       - destructive
+#       - secrets
+#       - exfiltration
+#
+#   discord:
+#     enabled: true
+#     webhookUrl: "${DISCORD_WEBHOOK_URL}"
+#     username: "Clawsec"
+#     minSeverity: critical
+#
+#   telegram:
+#     enabled: true
+#     botToken: "${TELEGRAM_BOT_TOKEN}"
+#     chatId: "${TELEGRAM_CHAT_ID}"
+#     parseMode: HTML
+#     minSeverity: critical
+
+# =============================================================================
+# EXTENDING TEMPLATES (Optional)
+# =============================================================================
+
+# Extend from built-in templates:
+# extends:
+#   - builtin/aws-security
+#   - builtin/pii-protection
+#   - builtin/production-strict
