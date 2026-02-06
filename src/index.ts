@@ -7,7 +7,7 @@
 // VERSION & CONSTANTS
 // =============================================================================
 
-export const VERSION = '1.0.0';
+export const VERSION = '0.0.1';
 export const PLUGIN_ID = 'clawsec';
 export const PLUGIN_NAME = 'Clawsec Security Plugin';
 

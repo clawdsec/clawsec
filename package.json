@@ -1,6 +1,6 @@
 {
   "name": "clawsec",
-  "version": "1.0.0",
+  "version": "0.0.1",
   "description": "Security plugin for OpenClaw.ai - prevents AI agents from taking dangerous actions",
   "main": "dist/src/index.js",
   "types": "dist/src/index.d.ts",
@@ -15,6 +15,14 @@
     "lint:fix": "eslint src --ext .ts --fix",
     "clean": "rm -rf dist",
     "prepublishOnly": "npm run build"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/clawdsec/clawsec.git"
+  },
+  "homepage": "https://github.com/clawdsec/clawsec#readme",
+  "bugs": {
+    "url": "https://github.com/clawdsec/clawsec/issues"
   },
   "keywords": [
     "openclaw",
@@ -36,7 +44,6 @@
   "files": [
     "dist",
     "rules",
-    "bin",
     "openclaw.plugin.json"
   ],
   "dependencies": {
