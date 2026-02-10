@@ -59,7 +59,13 @@ jobs:
       - name: Build
         run: npm run build
 
-      - name: Commit version bump
+      - name: Publish to npm
+        run: npm publish --provenance --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Commit version bump back to main
+        continue-on-error: true
         env:
           VERSION: ${{ steps.version.outputs.version }}
         run: |
@@ -68,8 +74,3 @@ jobs:
           git add package.json package-lock.json openclaw.plugin.json
           git diff --cached --quiet || git commit -m "chore: bump version to $VERSION"
           git push origin main
-
-      - name: Publish to npm
-        run: npm publish --provenance --access public
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
