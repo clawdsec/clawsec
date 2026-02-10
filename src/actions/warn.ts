@@ -35,14 +35,14 @@ export function generateWarnMessage(context: ActionContext): string {
   const { primaryDetection, detections } = analysis;
 
   if (!primaryDetection) {
-    return `Warning: ${toolCall.toolName} executed with security notice.`;
+    return `ClawSec Warning: ${toolCall.toolName} executed with security notice.`;
   }
 
   const category = formatCategory(primaryDetection.category);
   const severity = formatSeverity(primaryDetection.severity);
   const reason = primaryDetection.reason;
 
-  let message = `[${severity}] Warning: ${category} detected\n`;
+  let message = `ClawSec Warning: [${severity}] ${category} detected\n`;
   message += `Tool: ${toolCall.toolName}\n`;
   message += `Reason: ${reason}\n`;
   message += `\nAction allowed but logged for audit.`;

@@ -10,6 +10,7 @@ import type {
   SubDetector,
 } from './types.js';
 import type { Severity } from '../../config/index.js';
+import { createLogger, type Logger } from '../../utils/logger.js';
 
 /**
  * Python destructive patterns
@@ -498,9 +499,13 @@ export function matchCodePattern(code: string): CodeMatchResult {
  */
 export class CodeDetector implements SubDetector {
   private severity: Severity;
+  private customPatterns: string[];
+  private logger: Logger;
 
-  constructor(severity: Severity = 'critical') {
+  constructor(severity: Severity = 'critical', customPatterns?: string[], logger?: Logger) {
     this.severity = severity;
+    this.customPatterns = customPatterns || [];
+    this.logger = logger ?? createLogger(null, null);
   }
 
   /**
@@ -552,14 +557,51 @@ export class CodeDetector implements SubDetector {
     return null;
   }
 
+  /**
+   * Match custom patterns against code
+   */
+  private matchCustomPatterns(code: string): CodeMatchResult {
+    if (this.customPatterns.length === 0) {
+      return { matched: false, confidence: 0 };
+    }
+
+    this.logger.debug(`[CodeDetector] Checking ${this.customPatterns.length} custom patterns`);
+
+    for (const pattern of this.customPatterns) {
+      try {
+        const regex = new RegExp(pattern, 'i');
+        if (regex.test(code)) {
+          this.logger.info(`[CodeDetector] Custom pattern matched: ${pattern}`);
+          return {
+            matched: true,
+            code,
+            language: 'custom',
+            operation: 'custom-code-operation',
+            confidence: 0.85,
+          };
+        }
+      } catch (error) {
+        this.logger.warn(`[CodeDetector] Invalid regex pattern skipped: "${pattern}" - ${error instanceof Error ? error.message : String(error)}`);
+        continue;
+      }
+    }
+    return { matched: false, confidence: 0 };
+  }
+
   detect(context: DetectionContext): DestructiveDetectionResult | null {
     const code = this.extractCode(context);
     if (!code) {
       return null;
     }
 
-    const result = matchCodePattern(code);
-    
+    // Try built-in patterns first
+    let result = matchCodePattern(code);
+
+    // If no built-in match, try custom patterns
+    if (!result.matched && this.customPatterns.length > 0) {
+      result = this.matchCustomPatterns(code);
+    }
+
     if (!result.matched) {
       return null;
     }
@@ -596,6 +638,6 @@ export class CodeDetector implements SubDetector {
 /**
  * Create a code detector with the given severity
  */
-export function createCodeDetector(severity: Severity = 'critical'): CodeDetector {
-  return new CodeDetector(severity);
+export function createCodeDetector(severity: Severity = 'critical', customPatterns?: string[], logger?: Logger): CodeDetector {
+  return new CodeDetector(severity, customPatterns, logger);
 }

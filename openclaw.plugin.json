@@ -61,26 +61,6 @@
       "helpText": "Set logging verbosity (debug, info, warn, error)"
     }
   },
-  "hooks": {
-    "before-tool-call": {
-      "id": "clawsec-before-tool-call",
-      "description": "Intercepts tool calls to detect and block dangerous actions before execution",
-      "priority": 100,
-      "handler": "dist/index.js:beforeToolCallHandler"
-    },
-    "before-agent-start": {
-      "id": "clawsec-before-agent-start",
-      "description": "Injects security context and reminders into the agent's system prompt",
-      "priority": 50,
-      "handler": "dist/index.js:beforeAgentStartHandler"
-    },
-    "tool-result-persist": {
-      "id": "clawsec-tool-result-persist",
-      "description": "Filters sensitive data from tool outputs before persisting to conversation history",
-      "priority": 100,
-      "handler": "dist/index.js:toolResultPersistHandler"
-    }
-  },
   "configuration": {
     "externalConfigFile": {
       "format": "yaml",

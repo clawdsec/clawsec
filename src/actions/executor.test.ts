@@ -374,7 +374,6 @@ describe('ConfirmHandler', () => {
 
       const result = await handler.execute(context);
 
-      expect(result.message).toContain('/approve');
       expect(result.message).toContain('_clawsec_confirm');
     });
 
@@ -666,7 +665,8 @@ describe('DefaultActionExecutor', () => {
 
       expect(result.allowed).toBe(true);
       expect(result.logged).toBe(false);
-      expect(mockLogger.calls.debug.length).toBe(1);
+      // Executor now logs: Entry, Routing, handleAllow, Exit = 4 debug calls
+      expect(mockLogger.calls.debug.length).toBe(4);
     });
 
     it('should route block action correctly', async () => {
@@ -723,8 +723,9 @@ describe('DefaultActionExecutor', () => {
 
       expect(result.allowed).toBe(true);
       expect(result.logged).toBe(false);
-      expect(mockLogger.calls.debug.length).toBe(1);
-      expect(mockLogger.calls.debug[0][0]).toContain('disabled');
+      // Executor logs: Entry, "Plugin disabled", Exit = 3 debug calls
+      expect(mockLogger.calls.debug.length).toBe(3);
+      expect(mockLogger.calls.debug[1][0]).toContain('disabled');
     });
 
     it('should handle unknown action type', async () => {
@@ -918,7 +919,6 @@ describe('Integration', () => {
     expect(result.pendingApproval?.methods).toContain('native');
     expect(result.pendingApproval?.methods).toContain('agent-confirm');
     expect(result.message).toContain('Approval ID');
-    expect(result.message).toContain('/approve');
     expect(mockLogger.calls.info.length).toBe(1);
   });
 

@@ -301,7 +301,7 @@ export class PiiDetector implements SecretSubDetector {
   private severity: Severity;
   private includeEmail: boolean;
 
-  constructor(severity: Severity, includeEmail = false) {
+  constructor(severity: Severity, includeEmail = false, _logger?: any) {
     this.severity = severity;
     this.includeEmail = includeEmail;
   }
@@ -337,6 +337,6 @@ export class PiiDetector implements SecretSubDetector {
 /**
  * Create a PII detector
  */
-export function createPiiDetector(severity: Severity, includeEmail = false): PiiDetector {
-  return new PiiDetector(severity, includeEmail);
+export function createPiiDetector(severity: Severity, includeEmail = false, logger?: any): PiiDetector {
+  return new PiiDetector(severity, includeEmail, logger);
 }

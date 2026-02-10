@@ -1,5 +1,6 @@
 # Dependencies
 node_modules/
+package-lock.json
 
 # Build output
 dist/
@@ -28,6 +29,11 @@ npm-debug.log*
 
 # Clawsec local data
 .clawsec/
+clawsec.yaml
 
 # Serena
 .serena/
+
+# Claude
+.claude/
+Claude.md

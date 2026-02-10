@@ -59,6 +59,8 @@ export interface ExfiltrationDetectorConfig {
   severity: Severity;
   /** Action to take when exfiltration is detected */
   action: Action;
+  /** Custom patterns to detect (optional) */
+  patterns?: string[];
 }
 
 /**

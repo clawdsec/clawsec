@@ -10,6 +10,7 @@ import type {
   SubDetector,
 } from './types.js';
 import type { Severity } from '../../config/index.js';
+import { createLogger, type Logger } from '../../utils/logger.js';
 
 /**
  * AWS destructive command patterns
@@ -490,9 +491,13 @@ export function matchCloudCommand(command: string): CloudMatchResult {
  */
 export class CloudDetector implements SubDetector {
   private severity: Severity;
+  private customPatterns: string[];
+  private logger: Logger;
 
-  constructor(severity: Severity = 'critical') {
+  constructor(severity: Severity = 'critical', customPatterns: string[] = [], logger?: Logger) {
     this.severity = severity;
+    this.customPatterns = customPatterns;
+    this.logger = logger ?? createLogger(null, null);
   }
 
   /**
@@ -547,14 +552,51 @@ export class CloudDetector implements SubDetector {
     return null;
   }
 
+  /**
+   * Match custom patterns against command
+   */
+  private matchCustomPatterns(command: string): CloudMatchResult {
+    if (this.customPatterns.length === 0) {
+      return { matched: false, confidence: 0 };
+    }
+
+    this.logger.debug(`[CloudDetector] Checking ${this.customPatterns.length} custom patterns`);
+
+    for (const pattern of this.customPatterns) {
+      try {
+        const regex = new RegExp(pattern, 'i');
+        if (regex.test(command)) {
+          this.logger.info(`[CloudDetector] Custom pattern matched: ${pattern}`);
+          return {
+            matched: true,
+            command,
+            provider: 'custom',
+            operation: 'custom-cloud-operation',
+            confidence: 0.85,
+          };
+        }
+      } catch (error) {
+        this.logger.warn(`[CloudDetector] Invalid regex pattern skipped: "${pattern}" - ${error instanceof Error ? error.message : String(error)}`);
+        continue;
+      }
+    }
+    return { matched: false, confidence: 0 };
+  }
+
   detect(context: DetectionContext): DestructiveDetectionResult | null {
     const command = this.extractCommand(context);
     if (!command) {
       return null;
     }
 
-    const result = matchCloudCommand(command);
-    
+    // Try built-in patterns first
+    let result = matchCloudCommand(command);
+
+    // If no built-in match, try custom patterns
+    if (!result.matched && this.customPatterns.length > 0) {
+      result = this.matchCustomPatterns(command);
+    }
+
     if (!result.matched) {
       return null;
     }
@@ -569,6 +611,7 @@ export class CloudDetector implements SubDetector {
       kubernetes: 'Kubernetes',
       terraform: 'Terraform/IaC',
       git: 'Git',
+      custom: 'Custom Cloud',
     };
 
     const providerDesc = providerDescriptions[result.provider || 'unknown'] || result.provider;
@@ -590,8 +633,12 @@ export class CloudDetector implements SubDetector {
 }
 
 /**
- * Create a cloud detector with the given severity
+ * Create a cloud detector with the given severity and custom patterns
  */
-export function createCloudDetector(severity: Severity = 'critical'): CloudDetector {
-  return new CloudDetector(severity);
+export function createCloudDetector(
+  severity: Severity = 'critical',
+  customPatterns: string[] = [],
+  logger?: Logger
+): CloudDetector {
+  return new CloudDetector(severity, customPatterns, logger);
 }

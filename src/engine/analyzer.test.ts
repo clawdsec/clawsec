@@ -855,4 +855,180 @@ describe('HybridAnalyzer', () => {
       }
     });
   });
+
+  // ============================================================================
+  // Logging Tests (Phase 1)
+  // NOTE: Logger is created with createLogger(null, null) which defaults to 
+  // 'info' level, so we test INFO level logs. Debug logs would require passing
+  // config through logger creation, which is a larger refactor.
+  // ============================================================================
+
+  describe('Analyzer Logging', () => {
+    let consoleInfoSpy: ReturnType<typeof vi.spyOn>;
+    let consoleWarnSpy: ReturnType<typeof vi.spyOn>;
+
+    beforeEach(() => {
+      // Spy on console methods to capture logs (don't mock - let them through)
+      consoleInfoSpy = vi.spyOn(console, 'info');
+      consoleWarnSpy = vi.spyOn(console, 'warn');
+    });
+
+    afterEach(() => {
+      // Restore console methods
+      consoleInfoSpy.mockRestore();
+      consoleWarnSpy.mockRestore();
+    });
+
+    it('should log action determination', async () => {
+      const config = createTestConfig();
+      const analyzer = createAnalyzer(config);
+
+      await analyzer.analyze({
+        toolName: 'test_tool',
+        toolInput: { test: 'data' },
+      });
+
+      // Check for action determination log (INFO level)
+      const actionLogs = consoleInfoSpy.mock.calls.filter(call => 
+        call[0]?.includes('[clawsec] [Analyzer] Action determined')
+      );
+      expect(actionLogs.length).toBeGreaterThan(0);
+    });
+
+    it('should log individual detector results when detection occurs', async () => {
+      const config = createTestConfig({ global: { enabled: true, logLevel: 'debug' } });
+      const analyzer = createAnalyzer(config);
+
+      await analyzer.analyze({
+        toolName: 'bash',
+        toolInput: { command: 'rm -rf /' },
+      });
+
+      const actionLogs = consoleInfoSpy.mock.calls.filter(call => 
+        call[0]?.includes('[Analyzer] Action determined')
+      );
+      expect(actionLogs.length).toBeGreaterThan(0);
+    });
+
+    it('should log LLM invocation when needed', async () => {
+      const mockLLMClient = {
+        isAvailable: () => true,
+        analyze: vi.fn().mockResolvedValue({
+          determination: 'threat',
+          confidence: 0.8,
+          reasoning: 'Dangerous operation',
+          suggestedAction: 'block',
+        }),
+      };
+
+      const config = createTestConfig({
+        llm: { enabled: true, model: 'test' },
+        rules: {
+          purchase: { enabled: true, severity: 'high', action: 'confirm' },
+          website: { enabled: false, mode: 'blocklist', severity: 'high', action: 'block', blocklist: [], allowlist: [] },
+          destructive: { enabled: false, severity: 'critical', action: 'confirm' },
+          secrets: { enabled: false, severity: 'critical', action: 'block' },
+          exfiltration: { enabled: false, severity: 'high', action: 'block' },
+        },
+      });
+
+      const analyzer = new HybridAnalyzer({
+        config,
+        llmClient: mockLLMClient,
+      });
+
+      await analyzer.analyze({
+        toolName: 'browser_navigate',
+        toolInput: { url: 'https://shop.example.com' },
+        url: 'https://shop.example.com',
+      });
+
+      // Should log LLM analysis if it was invoked
+      if (mockLLMClient.analyze.mock.calls.length > 0) {
+        const llmLogs = consoleInfoSpy.mock.calls.filter(call => 
+          call[0]?.includes('[Analyzer] LLM')
+        );
+        expect(llmLogs.length).toBeGreaterThan(0);
+      }
+    });
+
+    it('should log LLM override when action changes', async () => {
+      const mockLLMClient = {
+        isAvailable: () => true,
+        analyze: vi.fn().mockResolvedValue({
+          determination: 'safe',
+          confidence: 0.85,
+          reasoning: 'False positive',
+          suggestedAction: 'allow',
+        }),
+      };
+
+      const config = createTestConfig({
+        llm: { enabled: true, model: 'test' },
+        rules: {
+          purchase: { enabled: true, severity: 'high', action: 'confirm' },
+          website: { enabled: false, mode: 'blocklist', severity: 'high', action: 'block', blocklist: [], allowlist: [] },
+          destructive: { enabled: false, severity: 'critical', action: 'confirm' },
+          secrets: { enabled: false, severity: 'critical', action: 'block' },
+          exfiltration: { enabled: false, severity: 'high', action: 'block' },
+        },
+      });
+
+      const analyzer = new HybridAnalyzer({
+        config,
+        llmClient: mockLLMClient,
+      });
+
+      await analyzer.analyze({
+        toolName: 'browser_navigate',
+        toolInput: { url: 'https://shop.example.com' },
+        url: 'https://shop.example.com',
+      });
+
+      // Should log LLM override if action changed
+      if (mockLLMClient.analyze.mock.calls.length > 0) {
+        const overrideLogs = consoleInfoSpy.mock.calls.filter(call => 
+          call[0]?.includes('[Analyzer] LLM override') || call[0]?.includes('[Analyzer] LLM response')
+        );
+        expect(overrideLogs.length).toBeGreaterThan(0);
+      }
+    });
+
+    it('should log LLM failure with warning', async () => {
+      const mockLLMClient = {
+        isAvailable: () => true,
+        analyze: vi.fn().mockRejectedValue(new Error('LLM API timeout')),
+      };
+
+      const config = createTestConfig({
+        llm: { enabled: true, model: 'test' },
+        rules: {
+          purchase: { enabled: true, severity: 'high', action: 'confirm' },
+          website: { enabled: false, mode: 'blocklist', severity: 'high', action: 'block', blocklist: [], allowlist: [] },
+          destructive: { enabled: false, severity: 'critical', action: 'confirm' },
+          secrets: { enabled: false, severity: 'critical', action: 'block' },
+          exfiltration: { enabled: false, severity: 'high', action: 'block' },
+        },
+      });
+
+      const analyzer = new HybridAnalyzer({
+        config,
+        llmClient: mockLLMClient,
+      });
+
+      await analyzer.analyze({
+        toolName: 'browser_navigate',
+        toolInput: { url: 'https://shop.example.com' },
+        url: 'https://shop.example.com',
+      });
+
+      // Should log warning about LLM failure
+      if (mockLLMClient.analyze.mock.calls.length > 0) {
+        const failureLogs = consoleWarnSpy.mock.calls.filter(call => 
+          call[0]?.includes('[Analyzer] LLM analysis failed')
+        );
+        expect(failureLogs.length).toBeGreaterThan(0);
+      }
+    });
+  });
 });

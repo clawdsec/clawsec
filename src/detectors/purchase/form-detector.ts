@@ -171,14 +171,17 @@ const HIGH_CONFIDENCE_PATTERNS = [
  */
 function matchesPattern(field: string, patterns: string[]): string | null {
   const fieldLower = field.toLowerCase().replace(/[-_\s]/g, '');
-  
+
   for (const pattern of patterns) {
     const patternLower = pattern.toLowerCase().replace(/[-_\s]/g, '');
-    if (fieldLower.includes(patternLower) || patternLower.includes(fieldLower)) {
+    // Only check if field contains pattern (one direction)
+    // This allows "billing_address" to match "address"
+    // But prevents "action" from matching "transaction-amount"
+    if (fieldLower.includes(patternLower)) {
       return pattern;
     }
   }
-  
+
   return null;
 }
 
@@ -324,7 +327,7 @@ export function containsPaymentValues(text: string): boolean {
 export class FormDetector implements SubDetector {
   private severity: Severity;
 
-  constructor(severity: Severity = 'critical') {
+  constructor(severity: Severity = "critical", _logger?: any) {
     this.severity = severity;
   }
 
@@ -375,6 +378,6 @@ export class FormDetector implements SubDetector {
 /**
  * Create a form detector with the given configuration
  */
-export function createFormDetector(severity: Severity = 'critical'): FormDetector {
-  return new FormDetector(severity);
+export function createFormDetector(severity: Severity = "critical", logger?: any): FormDetector {
+  return new FormDetector(severity, logger);
 }

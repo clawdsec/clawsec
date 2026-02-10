@@ -465,9 +465,11 @@ export function matchNetworkExfiltration(text: string): NetworkMatchResult {
  */
 export class NetworkDetector implements SubDetector {
   private severity: Severity;
+  private customPatterns: RegExp[];
 
-  constructor(severity: Severity = 'high') {
+  constructor(severity: Severity = "high", customPatterns: string[] = [], _logger?: any) {
     this.severity = severity;
+    this.customPatterns = customPatterns.map(p => new RegExp(p, 'i'));
   }
 
   /**
@@ -524,6 +526,23 @@ export class NetworkDetector implements SubDetector {
       return null;
     }
 
+    // Check custom patterns FIRST (highest confidence)
+    for (const pattern of this.customPatterns) {
+      if (pattern.test(content)) {
+        return {
+          detected: true,
+          category: 'exfiltration',
+          severity: this.severity,
+          confidence: 0.95,  // High confidence for explicit config patterns
+          reason: `Matched custom exfiltration pattern: ${pattern.source}`,
+          metadata: {
+            method: 'network',
+          },
+        };
+      }
+    }
+
+    // Then check hardcoded patterns
     const result = matchNetworkExfiltration(content);
     
     if (!result.matched) {
@@ -556,6 +575,6 @@ export class NetworkDetector implements SubDetector {
 /**
  * Create a network detector with the given severity
  */
-export function createNetworkDetector(severity: Severity = 'high'): NetworkDetector {
-  return new NetworkDetector(severity);
+export function createNetworkDetector(severity: Severity = "high", customPatterns: string[] = [], logger?: any): NetworkDetector {
+  return new NetworkDetector(severity, customPatterns, logger);
 }

@@ -24,6 +24,7 @@ import { createAnalyzer } from '../../engine/analyzer.js';
 import { createActionExecutor } from '../../actions/executor.js';
 import { createAgentConfirmHandler } from '../../approval/agent-confirm.js';
 import { getDefaultApprovalStore } from '../../approval/store.js';
+import { createLogger, type Logger } from '../../utils/logger.js';
 
 /**
  * Options for creating a before-tool-call handler
@@ -42,28 +43,29 @@ export interface BeforeToolCallHandlerOptions {
  * The engine context has a slightly different shape
  */
 function toEngineContext(hookContext: HookToolCallContext): EngineToolCallContext {
+  const toolInput = hookContext.toolInput || {};
   return {
     toolName: hookContext.toolName,
-    toolInput: hookContext.toolInput,
+    toolInput,
     // url can be extracted from toolInput if present
-    url: typeof hookContext.toolInput.url === 'string' ? hookContext.toolInput.url : undefined,
+    url: typeof toolInput.url === 'string' ? toolInput.url : undefined,
   };
 }
 
 /**
- * Convert analysis result and action result to BeforeToolCallResult
+ * Convert analysis result and action result to BeforeToolCallResult (modern API)
  */
 function toBeforeToolCallResult(
   actionResult: ActionResult,
   detection?: Detection
 ): BeforeToolCallResult {
   const result: BeforeToolCallResult = {
-    allow: actionResult.allowed,
+    block: !actionResult.allowed, // Inverted: !allow = block
   };
 
-  // Add block message if not allowed
+  // Add block reason if blocked
   if (!actionResult.allowed && actionResult.message) {
-    result.blockMessage = actionResult.message;
+    result.blockReason = actionResult.message;
   }
 
   // Add metadata from primary detection
@@ -80,43 +82,43 @@ function toBeforeToolCallResult(
     }
   }
 
-  // Add pending approval instructions to block message if present
+  // Add pending approval instructions to block reason if present
   if (actionResult.pendingApproval) {
     const approvalInfo = `\n\nApproval ID: ${actionResult.pendingApproval.id}\nTimeout: ${actionResult.pendingApproval.timeout}s\nMethods: ${actionResult.pendingApproval.methods.join(', ')}`;
-    result.blockMessage = (result.blockMessage || 'Approval required') + approvalInfo;
+    result.blockReason = (result.blockReason || 'Approval required') + approvalInfo;
   }
 
   return result;
 }
 
 /**
- * Create the allow result for when no threats are detected
+ * Create the allow result for when no threats are detected (modern API)
  */
 function createAllowResult(): BeforeToolCallResult {
   return {
-    allow: true,
+    block: false, // Modern: explicit false means allow
   };
 }
 
 /**
- * Create a result for valid agent-confirm flow
+ * Create a result for valid agent-confirm flow (modern API)
  */
 function createAgentConfirmAllowResult(
   strippedInput: Record<string, unknown>
 ): BeforeToolCallResult {
   return {
-    allow: true,
-    modifiedInput: strippedInput,
+    block: false,
+    params: strippedInput, // Modern: renamed from modifiedInput
   };
 }
 
 /**
- * Create a result for invalid agent-confirm flow
+ * Create a result for invalid agent-confirm flow (modern API)
  */
 function createAgentConfirmInvalidResult(error?: string): BeforeToolCallResult {
   return {
-    allow: false,
-    blockMessage: error || 'Invalid or expired approval confirmation',
+    block: true, // Modern: true = block
+    blockReason: error || 'Invalid or expired approval confirmation',
     metadata: {
       reason: 'Agent confirmation parameter was present but invalid',
     },
@@ -124,11 +126,11 @@ function createAgentConfirmInvalidResult(error?: string): BeforeToolCallResult {
 }
 
 /**
- * Create a result for disabled plugin
+ * Create a result for disabled plugin (modern API)
  */
 function createDisabledResult(): BeforeToolCallResult {
   return {
-    allow: true,
+    block: false,
   };
 }
 
@@ -144,66 +146,92 @@ function createDisabledResult(): BeforeToolCallResult {
  *
  * @param config - Clawsec configuration
  * @param options - Optional custom components
+ * @param logger - Optional logger instance
  * @returns BeforeToolCallHandler function
  */
 export function createBeforeToolCallHandler(
   config: ClawsecConfig,
-  options?: BeforeToolCallHandlerOptions
+  options?: BeforeToolCallHandlerOptions,
+  logger?: Logger
 ): BeforeToolCallHandler {
+  const log = logger ?? createLogger(null, null);
+
   // Create or use provided components
-  const analyzer = options?.analyzer ?? createAnalyzer(config);
-  const executor = options?.executor ?? createActionExecutor();
+  const analyzer = options?.analyzer ?? createAnalyzer(config, undefined, log);
+  const executor = options?.executor ?? createActionExecutor({ logger: log });
   const agentConfirm =
     options?.agentConfirm ??
     createAgentConfirmHandler({
       enabled: config.approval?.agentConfirm?.enabled ?? true,
       parameterName: config.approval?.agentConfirm?.parameterName,
       store: getDefaultApprovalStore(),
+      logger: log,
     });
 
   // Get the parameter name from config
   const confirmParamName = config.approval?.agentConfirm?.parameterName ?? '_clawsec_confirm';
 
   return async (context: HookToolCallContext): Promise<BeforeToolCallResult> => {
-    // 1. Check if plugin is disabled
-    if (config.global?.enabled === false) {
-      return createDisabledResult();
-    }
+    try {
+      // Normalize context: OpenClaw may send 'params' instead of 'toolInput'
+      // Support both field names for backward compatibility
+      const normalizedContext: HookToolCallContext = {
+        ...context,
+        toolInput: context.toolInput || (context as any).params || {},
+      };
 
-    // 2. Check for agent-confirm parameter
+      const toolName = normalizedContext.toolName;
+      log.info(`[Hook:before-tool-call] Entry: tool=${toolName}`);
+
+      // Validate context (using normalized version)
+      if (!normalizedContext || !normalizedContext.toolName || !normalizedContext.toolInput) {
+        log.error(`[Hook:before-tool-call] Invalid context received`, context);
+        return createAllowResult(); // Fail-open for invalid context
+      }
+
+      // 1. Check if plugin is disabled
+      if (config.global?.enabled === false) {
+        log.info(`[Hook:before-tool-call] Plugin disabled, allowing tool`);
+        return createDisabledResult();
+      }
+
+      // 2. Check for agent-confirm parameter
     if (config.approval?.agentConfirm?.enabled !== false) {
       const confirmResult = agentConfirm.checkConfirmation(
-        context.toolInput,
+        normalizedContext.toolInput,
         confirmParamName
       );
 
       if (confirmResult.confirmed) {
         // Agent is trying to confirm a previous action
         const processResult = agentConfirm.processConfirmation(
-          context.toolInput,
+          normalizedContext.toolInput,
           confirmParamName
         );
 
         if (processResult.valid) {
           // Valid confirmation - strip the parameter and allow
           const strippedInput = agentConfirm.stripConfirmParameter(
-            context.toolInput,
+            normalizedContext.toolInput,
             confirmParamName
           );
+          log.info(`[Hook:before-tool-call] Exit: tool=${toolName}, result=allow (agent-confirm validated)`);
           return createAgentConfirmAllowResult(strippedInput);
         } else {
           // Invalid confirmation - block
+          log.warn(`[Hook:before-tool-call] Exit: tool=${toolName}, result=block (invalid agent-confirm)`);
           return createAgentConfirmInvalidResult(processResult.error);
         }
       }
     }
 
-    // 3. Run the analyzer
-    const engineContext = toEngineContext(context);
+    // 3. Run the analyzer (using normalized context)
+    const engineContext = toEngineContext(normalizedContext);
     const analysis = await analyzer.analyze(engineContext);
 
     // 4. If no detections or action is allow/log/warn, handle appropriately
     if (analysis.action === 'allow') {
+      log.debug(`[Hook:before-tool-call] Exit: tool=${toolName}, result=allow`);
       return createAllowResult();
     }
 
@@ -216,8 +244,16 @@ export function createBeforeToolCallHandler(
 
     const actionResult = await executor.execute(actionContext);
 
-    // 6. Convert to BeforeToolCallResult
-    return toBeforeToolCallResult(actionResult, analysis.primaryDetection);
+      // 6. Convert to BeforeToolCallResult
+      const result = toBeforeToolCallResult(actionResult, analysis.primaryDetection);
+      log.info(`[Hook:before-tool-call] Exit: tool=${toolName}, result=${result.block ? 'block' : 'allow'}`);
+      return result;
+    } catch (error) {
+      // Error handling: log and fail-open (allow the action)
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      log.error(`[Hook:before-tool-call] Unhandled error: ${errorMessage}`, error);
+      return createAllowResult(); // Fail-open on errors
+    }
   };
 }
 

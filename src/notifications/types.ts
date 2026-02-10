@@ -11,7 +11,7 @@ export type Severity = 'critical' | 'high' | 'medium' | 'low';
 /**
  * Categories of security threats
  */
-export type ThreatCategory = 'purchase' | 'website' | 'destructive' | 'secrets' | 'exfiltration';
+export type ThreatCategory = 'purchase' | 'website' | 'destructive' | 'secrets' | 'exfiltration' | 'unknown';
 
 /**
  * Supported notification channels

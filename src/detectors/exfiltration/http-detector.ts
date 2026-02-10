@@ -385,9 +385,11 @@ export function matchHttpExfiltration(text: string): HttpMatchResult {
  */
 export class HttpDetector implements SubDetector {
   private severity: Severity;
+  private customPatterns: RegExp[];
 
-  constructor(severity: Severity = 'high') {
+  constructor(severity: Severity = "high", customPatterns: string[] = [], _logger?: any) {
     this.severity = severity;
+    this.customPatterns = customPatterns.map(p => new RegExp(p, 'i'));
   }
 
   /**
@@ -444,6 +446,23 @@ export class HttpDetector implements SubDetector {
       return null;
     }
 
+    // Check custom patterns FIRST (highest confidence)
+    for (const pattern of this.customPatterns) {
+      if (pattern.test(content)) {
+        return {
+          detected: true,
+          category: 'exfiltration',
+          severity: this.severity,
+          confidence: 0.95,  // High confidence for explicit config patterns
+          reason: `Matched custom exfiltration pattern: ${pattern.source}`,
+          metadata: {
+            method: 'http',
+          },
+        };
+      }
+    }
+
+    // Then check hardcoded patterns
     const result = matchHttpExfiltration(content);
     
     if (!result.matched) {
@@ -472,6 +491,6 @@ export class HttpDetector implements SubDetector {
 /**
  * Create an HTTP detector with the given severity
  */
-export function createHttpDetector(severity: Severity = 'high'): HttpDetector {
-  return new HttpDetector(severity);
+export function createHttpDetector(severity: Severity = "high", customPatterns: string[] = [], logger?: any): HttpDetector {
+  return new HttpDetector(severity, customPatterns, logger);
 }

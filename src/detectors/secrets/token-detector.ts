@@ -235,7 +235,7 @@ export function matchTokens(text: string): TokenMatch[] {
 export class TokenDetector implements SecretSubDetector {
   private severity: Severity;
 
-  constructor(severity: Severity) {
+  constructor(severity: Severity, _logger?: any) {
     this.severity = severity;
   }
 
@@ -264,6 +264,6 @@ export class TokenDetector implements SecretSubDetector {
 /**
  * Create a token detector
  */
-export function createTokenDetector(severity: Severity): TokenDetector {
-  return new TokenDetector(severity);
+export function createTokenDetector(severity: Severity, logger?: any): TokenDetector {
+  return new TokenDetector(severity, logger);
 }

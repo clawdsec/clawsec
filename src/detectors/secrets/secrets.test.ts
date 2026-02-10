@@ -725,10 +725,36 @@ describe('SecretsDetector', () => {
 
       const results = await detector.detectAll(context);
       expect(results.length).toBeGreaterThan(1);
-      
+
       const types = results.map(r => r.metadata?.type);
       expect(types).toContain('api-key');
       expect(types).toContain('pii');
+    });
+
+    it('should handle undefined toolInput gracefully', async () => {
+      const context: SecretsDetectionContext = {
+        toolName: 'some_tool',
+        toolInput: undefined,
+        toolOutput: 'sk-abcdefghijklmnopqrstuvwxyz1234567890abcdefghijklmno',
+      };
+
+      // Should not throw and should still scan toolOutput
+      const results = await detector.detectAll(context);
+      expect(results.length).toBeGreaterThan(0);
+      expect(results[0].metadata?.type).toBe('api-key');
+    });
+
+    it('should handle undefined toolInput in detect method', async () => {
+      const context: SecretsDetectionContext = {
+        toolName: 'some_tool',
+        toolInput: undefined,
+        toolOutput: 'password=supersecret123',
+      };
+
+      // Should not throw
+      const result = await detector.detect(context);
+      expect(result.detected).toBe(true);
+      expect(result.category).toBe('secrets');
     });
   });
 

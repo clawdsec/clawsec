@@ -12,10 +12,10 @@ import type {
 } from '../../index.js';
 import type { ClawsecConfig } from '../../config/schema.js';
 import type { SecretsDetectionResult } from '../../detectors/secrets/types.js';
-import { createSecretsDetector } from '../../detectors/secrets/index.js';
 import { scan, sanitize } from '../../sanitization/scanner.js';
 import type { ScannerConfig } from '../../sanitization/types.js';
 import { filterOutput } from './filter.js';
+import { createLogger, type Logger } from '../../utils/logger.js';
 
 /**
  * Options for creating a tool-result-persist handler
@@ -34,37 +34,40 @@ export interface ToolResultPersistHandlerOptions {
 }
 
 /**
- * Create an allow result with no filtering
+ * Create an allow result with no filtering (modern API)
  */
 function createAllowResult(): ToolResultPersistResult {
-  return {
-    allow: true,
-  };
+  return {}; // Modern API: empty object means no changes (allow)
 }
 
 /**
- * Create a block result for detected prompt injections
+ * Create a block result for detected prompt injections (modern API)
+ * Note: Modern API doesn't support blocking, only filtering.
+ * We'll return empty message with redactions metadata.
  */
 function createBlockResult(
   redactions: Array<{ type: string; description: string }>
 ): ToolResultPersistResult {
   return {
-    allow: false,
-    redactions,
+    message: {
+      content: '[BLOCKED: Content violated security policy]',
+      redactions,
+    },
   };
 }
 
 /**
- * Create a result with filtered output and redaction info
+ * Create a result with filtered output and redaction info (modern API)
  */
 function createFilteredResult(
   filteredOutput: unknown,
   redactions: Array<{ type: string; description: string }>
 ): ToolResultPersistResult {
   return {
-    allow: true,
-    filteredOutput,
-    redactions,
+    message: {
+      content: filteredOutput,
+      redactions,
+    },
   };
 }
 
@@ -99,21 +102,20 @@ function outputToString(output: unknown): string | undefined {
  *
  * @param config - Clawsec configuration
  * @param options - Optional handler options
+ * @param logger - Optional logger instance
  * @returns ToolResultPersistHandler function
  */
 export function createToolResultPersistHandler(
   config: ClawsecConfig,
-  options?: ToolResultPersistHandlerOptions
+  options?: ToolResultPersistHandlerOptions,
+  logger?: Logger
 ): ToolResultPersistHandler {
+  const log = logger ?? createLogger(null, null);
   const filterEnabled = options?.filter ?? true;
   const scanInjectionsEnabled = options?.scanInjections ?? true;
 
-  // Create secrets detector from config
-  const secretsDetector = createSecretsDetector({
-    enabled: config.rules?.secrets?.enabled ?? true,
-    severity: config.rules?.secrets?.severity ?? 'critical',
-    action: config.rules?.secrets?.action ?? 'block',
-  });
+  // Note: We don't use the async secrets detector here because this handler
+  // must be synchronous. The filterOutput function provides synchronous pattern matching.
 
   // Create scanner config from sanitization rules
   const sanitizationConfig = config.rules?.sanitization;
@@ -129,9 +131,13 @@ export function createToolResultPersistHandler(
     redactMatches: sanitizationConfig?.redactMatches ?? false,
   };
 
-  return async (context: ToolResultContext): Promise<ToolResultPersistResult> => {
+  return (context: ToolResultContext): ToolResultPersistResult => {
+    const toolName = context.toolName;
+    log.debug(`[Hook:tool-result-persist] Entry: tool=${toolName}`);
+
     // 1. Check if plugin is globally disabled
     if (config.global?.enabled === false) {
+      log.debug(`[Hook:tool-result-persist] Plugin disabled, allowing output`);
       return createAllowResult();
     }
 
@@ -140,9 +146,13 @@ export function createToolResultPersistHandler(
 
     // 2. Run prompt injection scanner if enabled
     if (scanInjectionsEnabled && sanitizationConfig?.enabled !== false && toolOutputString) {
+      log.debug(`[Hook:tool-result-persist] Scanning for prompt injections`);
       const scanResult = scan(toolOutputString, scannerConfig);
 
       if (scanResult.hasInjection) {
+        const categories = [...new Set(scanResult.matches.map(m => m.category))];
+        log.warn(`[Hook:tool-result-persist] Prompt injection detected: categories=${categories.join(',')}, matches=${scanResult.matches.length}`);
+
         const injectionRedactions = scanResult.matches.map(match => ({
           type: `injection-${match.category}`,
           description: `Prompt injection detected: ${match.match.substring(0, 50)}${match.match.length > 50 ? '...' : ''}`,
@@ -150,11 +160,13 @@ export function createToolResultPersistHandler(
 
         // If action is 'block', reject the output entirely
         if (sanitizationConfig?.action === 'block') {
+          log.info(`[Hook:tool-result-persist] Blocking output due to injection`);
           return createBlockResult(injectionRedactions);
         }
 
         // If redactMatches is enabled, sanitize the output
         if (sanitizationConfig?.redactMatches) {
+          log.info(`[Hook:tool-result-persist] Sanitizing injection patterns`);
           const sanitizedOutput = sanitize(toolOutputString, scanResult.matches);
           return createFilteredResult(sanitizedOutput, injectionRedactions);
         }
@@ -169,29 +181,23 @@ export function createToolResultPersistHandler(
       return createAllowResult();
     }
 
-    // 4. Run secrets detector on the tool output
-    let detections: SecretsDetectionResult[] = [];
-    try {
-      detections = await secretsDetector.detectAll({
-        toolName: context.toolName,
-        toolInput: context.toolInput,
-        toolOutput: toolOutputString,
-      });
-    } catch {
-      // If detection fails, allow the output through without filtering
-      // This ensures tool results aren't lost due to detector errors
-      return createAllowResult();
-    }
+    // 4. Skip async secrets detector - filterOutput below does synchronous pattern matching
+    // Note: This handler must be synchronous per OpenClaw requirements
+    // The filterOutput function (line 211) catches secrets via regex patterns
+    log.debug(`[Hook:tool-result-persist] Using synchronous pattern matching for secrets`);
+    const detections: SecretsDetectionResult[] = [];
 
     // 5. Filter output with pattern matching (catches secrets detector might have missed)
     const filterResult = filterOutput(context.toolOutput, detections);
 
     // 6. If nothing was redacted, allow through unchanged
     if (!filterResult.wasRedacted) {
+      log.debug(`[Hook:tool-result-persist] Exit: tool=${toolName}, no filtering needed`);
       return createAllowResult();
     }
 
     // 7. Return filtered result with redaction metadata
+    log.info(`[Hook:tool-result-persist] Exit: tool=${toolName}, redactions=${filterResult.redactions.length}`);
     return createFilteredResult(
       filterResult.filteredOutput,
       filterResult.redactions
