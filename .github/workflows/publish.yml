@@ -49,7 +49,7 @@ jobs:
       - name: Update package.json version
         env:
           VERSION: ${{ steps.version.outputs.version }}
-        run: npm version "$VERSION" --no-git-tag-version
+        run: npm version "$VERSION" --no-git-tag-version --allow-same-version
 
       - name: Update openclaw.plugin.json version
         env:
