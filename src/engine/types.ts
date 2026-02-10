@@ -4,6 +4,7 @@
  */
 
 import type { Severity, ClawsecConfig } from '../config/index.js';
+import type { Logger } from '../utils/logger.js';
 
 /**
  * Actions that can be returned by the analyzer
@@ -14,12 +15,13 @@ export type AnalysisAction = 'allow' | 'block' | 'confirm' | 'warn' | 'log';
 /**
  * Threat categories that can be detected
  */
-export type ThreatCategory = 
+export type ThreatCategory =
   | 'purchase'
   | 'website'
   | 'destructive'
   | 'secrets'
-  | 'exfiltration';
+  | 'exfiltration'
+  | 'unknown';
 
 /**
  * Detection context provided to the engine
@@ -111,6 +113,8 @@ export interface AnalyzerConfig {
   cacheTtlMs?: number;
   /** Optional LLM client for analyzing ambiguous detections */
   llmClient?: LLMClient;
+  /** Optional logger instance */
+  logger?: Logger;
 }
 
 /**

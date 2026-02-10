@@ -35,14 +35,14 @@ export function generateBlockMessage(context: ActionContext): string {
   const { primaryDetection, detections } = analysis;
 
   if (!primaryDetection) {
-    return `Action blocked: ${toolCall.toolName} was blocked by security policy.`;
+    return `Blocked by ClawSec: ${toolCall.toolName} was blocked by security policy.`;
   }
 
   const category = formatCategory(primaryDetection.category);
   const severity = formatSeverity(primaryDetection.severity);
   const reason = primaryDetection.reason;
 
-  let message = `[${severity}] ${category} detected - Action blocked\n`;
+  let message = `Blocked by ClawSec: [${severity}] ${category} detected\n`;
   message += `Tool: ${toolCall.toolName}\n`;
   message += `Reason: ${reason}`;
 
