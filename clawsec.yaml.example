@@ -141,23 +141,10 @@ rules:
 # =============================================================================
 
 approval:
-  # Native OpenClaw approval (/approve command)
-  native:
-    enabled: true
-    timeout: 300          # 5 minutes
-
   # Agent-confirm (retry with confirmation parameter)
   agentConfirm:
     enabled: true
     parameterName: "_clawsec_confirm"
-
-  # Webhook approval (external system)
-  webhook:
-    enabled: false
-    url: "https://api.example.com/clawsec/approve"
-    timeout: 30
-    headers:
-      Authorization: "Bearer ${CLAWSEC_WEBHOOK_TOKEN}"
 
 # =============================================================================
 # NOTIFICATIONS (Optional)
