@@ -10,6 +10,7 @@ import type {
   SubDetector,
 } from './types.js';
 import type { Severity } from '../../config/index.js';
+import { createLogger, type Logger } from '../../utils/logger.js';
 
 /**
  * Dangerous paths that should never be deleted recursively
@@ -256,9 +257,13 @@ export function matchShellCommand(command: string): ShellMatchResult {
  */
 export class ShellDetector implements SubDetector {
   private severity: Severity;
+  private customPatterns: string[];
+  private logger: Logger;
 
-  constructor(severity: Severity = 'critical') {
+  constructor(severity: Severity = 'critical', customPatterns: string[] = [], logger?: Logger) {
     this.severity = severity;
+    this.customPatterns = customPatterns;
+    this.logger = logger ?? createLogger(null, null);
   }
 
   /**
@@ -319,14 +324,51 @@ export class ShellDetector implements SubDetector {
     return null;
   }
 
+  /**
+   * Match custom patterns against command
+   */
+  private matchCustomPatterns(command: string): ShellMatchResult {
+    if (this.customPatterns.length === 0) {
+      return { matched: false, confidence: 0 };
+    }
+
+    this.logger.debug(`[ShellDetector] Checking ${this.customPatterns.length} custom patterns`);
+
+    for (const pattern of this.customPatterns) {
+      try {
+        const regex = new RegExp(pattern, 'i');
+        if (regex.test(command)) {
+          this.logger.info(`[ShellDetector] Custom pattern matched: ${pattern}`);
+          return {
+            matched: true,
+            command,
+            operation: 'custom-shell-command',
+            confidence: 0.85,
+            riskDescription: `Custom shell pattern matched: ${pattern}`,
+          };
+        }
+      } catch (error) {
+        this.logger.warn(`[ShellDetector] Invalid regex pattern skipped: "${pattern}" - ${error instanceof Error ? error.message : String(error)}`);
+        continue;
+      }
+    }
+    return { matched: false, confidence: 0 };
+  }
+
   detect(context: DetectionContext): DestructiveDetectionResult | null {
     const command = this.extractCommand(context);
     if (!command) {
       return null;
     }
 
-    const result = matchShellCommand(command);
-    
+    // Try built-in patterns first
+    let result = matchShellCommand(command);
+
+    // If no built-in match, try custom patterns
+    if (!result.matched && this.customPatterns.length > 0) {
+      result = this.matchCustomPatterns(command);
+    }
+
     if (!result.matched) {
       return null;
     }
@@ -348,8 +390,12 @@ export class ShellDetector implements SubDetector {
 }
 
 /**
- * Create a shell detector with the given severity
+ * Create a shell detector with the given severity and custom patterns
  */
-export function createShellDetector(severity: Severity = 'critical'): ShellDetector {
-  return new ShellDetector(severity);
+export function createShellDetector(
+  severity: Severity = 'critical',
+  customPatterns: string[] = [],
+  logger?: Logger
+): ShellDetector {
+  return new ShellDetector(severity, customPatterns, logger);
 }

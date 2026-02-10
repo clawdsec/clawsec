@@ -250,7 +250,7 @@ export function matchUrlPath(url: string): UrlMatchResult {
 export class UrlDetector implements SubDetector {
   private severity: Severity;
 
-  constructor(severity: Severity = 'critical') {
+  constructor(severity: Severity = "critical", _logger?: any) {
     this.severity = severity;
   }
 
@@ -323,6 +323,6 @@ export class UrlDetector implements SubDetector {
 /**
  * Create a URL detector with the given configuration
  */
-export function createUrlDetector(severity: Severity = 'critical'): UrlDetector {
-  return new UrlDetector(severity);
+export function createUrlDetector(severity: Severity = "critical", logger?: any): UrlDetector {
+  return new UrlDetector(severity, logger);
 }

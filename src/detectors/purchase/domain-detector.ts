@@ -247,7 +247,7 @@ export class DomainDetector implements SubDetector {
   private severity: Severity;
   private customBlocklist: string[];
 
-  constructor(severity: Severity = 'critical', customBlocklist: string[] = []) {
+  constructor(severity: Severity = "critical", customBlocklist: string[] = [], _logger?: any) {
     this.severity = severity;
     this.customBlocklist = customBlocklist;
   }

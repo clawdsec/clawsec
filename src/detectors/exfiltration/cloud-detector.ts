@@ -369,9 +369,11 @@ export function matchCloudUpload(text: string): CloudUploadMatchResult {
  */
 export class CloudUploadDetector implements SubDetector {
   private severity: Severity;
+  private customPatterns: RegExp[];
 
-  constructor(severity: Severity = 'high') {
+  constructor(severity: Severity = "high", customPatterns: string[] = [], _logger?: any) {
     this.severity = severity;
+    this.customPatterns = customPatterns.map(p => new RegExp(p, 'i'));
   }
 
   /**
@@ -428,6 +430,23 @@ export class CloudUploadDetector implements SubDetector {
       return null;
     }
 
+    // Check custom patterns FIRST (highest confidence)
+    for (const pattern of this.customPatterns) {
+      if (pattern.test(content)) {
+        return {
+          detected: true,
+          category: 'exfiltration',
+          severity: this.severity,
+          confidence: 0.95,  // High confidence for explicit config patterns
+          reason: `Matched custom exfiltration pattern: ${pattern.source}`,
+          metadata: {
+            method: 'cloud',
+          },
+        };
+      }
+    }
+
+    // Then check hardcoded patterns
     const result = matchCloudUpload(content);
     
     if (!result.matched) {
@@ -466,6 +485,6 @@ export class CloudUploadDetector implements SubDetector {
 /**
  * Create a cloud upload detector with the given severity
  */
-export function createCloudUploadDetector(severity: Severity = 'high'): CloudUploadDetector {
-  return new CloudUploadDetector(severity);
+export function createCloudUploadDetector(severity: Severity = "high", customPatterns: string[] = [], logger?: any): CloudUploadDetector {
+  return new CloudUploadDetector(severity, customPatterns, logger);
 }

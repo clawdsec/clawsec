@@ -10,6 +10,7 @@ import type {
   ApiKeyProvider,
 } from './types.js';
 import type { Severity } from '../../config/index.js';
+import { createLogger, type Logger } from '../../utils/logger.js';
 
 /**
  * API key pattern definitions
@@ -296,16 +297,42 @@ export function matchApiKeys(text: string): ApiKeyMatch[] {
  */
 export class ApiKeyDetector implements SecretSubDetector {
   private severity: Severity;
+  private customPatterns: string[];
+  private logger: Logger;
 
-  constructor(severity: Severity) {
+  constructor(severity: Severity, customPatterns?: string[], logger?: Logger) {
     this.severity = severity;
+    this.customPatterns = customPatterns || [];
+    this.logger = logger ?? createLogger(null, null);
   }
 
-  /**
-   * Scan text for API keys
-   */
   scan(text: string, location: string): SecretsDetectionResult[] {
     const matches = matchApiKeys(text);
+
+    // Add custom pattern matches
+    if (this.customPatterns.length > 0) {
+      this.logger.debug(`[ApiKeyDetector] Checking ${this.customPatterns.length} custom patterns`);
+
+      for (const pattern of this.customPatterns) {
+        try {
+          const regex = new RegExp(pattern, 'gi');
+          let match;
+          while ((match = regex.exec(text)) !== null) {
+            this.logger.info(`[ApiKeyDetector] Custom pattern matched: ${pattern}`);
+            matches.push({
+              matched: true,
+              value: match[0],
+              provider: 'custom',
+              redactedValue: '[REDACTED:custom]',
+              confidence: 0.85,
+            });
+          }
+        } catch (error) {
+          this.logger.warn(`[ApiKeyDetector] Invalid regex pattern skipped: "${pattern}" - ${error instanceof Error ? error.message : String(error)}`);
+          continue;
+        }
+      }
+    }
     
     return matches.map((match) => ({
       detected: true,
@@ -324,8 +351,8 @@ export class ApiKeyDetector implements SecretSubDetector {
 }
 
 /**
- * Create an API key detector
+ * Create an API key detector with custom patterns
  */
-export function createApiKeyDetector(severity: Severity): ApiKeyDetector {
-  return new ApiKeyDetector(severity);
+export function createApiKeyDetector(severity: Severity, customPatterns?: string[], logger?: Logger): ApiKeyDetector {
+  return new ApiKeyDetector(severity, customPatterns, logger);
 }

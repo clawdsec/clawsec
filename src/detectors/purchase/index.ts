@@ -9,6 +9,7 @@ import type {
   PurchaseDetector as IPurchaseDetector,
   PurchaseDetectorConfig,
 } from './types.js';
+import { createLogger, type Logger } from '../../utils/logger.js';
 import { DomainDetector, createDomainDetector } from './domain-detector.js';
 import { UrlDetector, createUrlDetector } from './url-detector.js';
 import { FormDetector, createFormDetector } from './form-detector.js';
@@ -127,39 +128,70 @@ export class PurchaseDetectorImpl implements IPurchaseDetector {
   private urlDetector: UrlDetector;
   private formDetector: FormDetector;
   private spendTracker: SpendTracker;
+  private logger: Logger;
 
-  constructor(config: PurchaseDetectorConfig, spendTracker?: SpendTracker) {
+  constructor(config: PurchaseDetectorConfig, spendTracker?: SpendTracker, logger?: Logger) {
     this.config = config;
-    
-    const customBlocklist = config.domains?.mode === 'blocklist' 
+    this.logger = logger ?? createLogger(null, null);
+
+    const customBlocklist = config.domains?.mode === 'blocklist'
       ? (config.domains.blocklist || [])
       : [];
-    
+
     this.domainDetector = createDomainDetector(config.severity, customBlocklist);
-    this.urlDetector = createUrlDetector(config.severity);
-    this.formDetector = createFormDetector(config.severity);
+    this.urlDetector = createUrlDetector(config.severity, this.logger);
+    this.formDetector = createFormDetector(config.severity, this.logger);
     this.spendTracker = spendTracker || getGlobalSpendTracker();
   }
 
   async detect(context: DetectionContext): Promise<DetectionResult> {
+    this.logger.debug(`[PurchaseDetector] Starting detection: tool=${context.toolName}`);
+
     // Check if detector is enabled
     if (!this.config.enabled) {
+      this.logger.debug(`[PurchaseDetector] Detector disabled`);
       return noDetection(this.config.severity);
     }
 
     // Run all sub-detectors
+    this.logger.debug(`[PurchaseDetector] Running domain detector`);
     const domainResult = this.domainDetector.detect(context);
+    if (domainResult && domainResult.detected) {
+      this.logger.info(`[PurchaseDetector] Domain detection: domain=${domainResult.metadata?.domain || 'unknown'}, confidence=${domainResult.confidence}`);
+    }
+
+    this.logger.debug(`[PurchaseDetector] Running URL detector`);
     const urlResult = this.urlDetector.detect(context);
+    if (urlResult && urlResult.detected) {
+      this.logger.info(`[PurchaseDetector] URL detection: url=${urlResult.metadata?.url || 'unknown'}, confidence=${urlResult.confidence}`);
+    }
+
+    this.logger.debug(`[PurchaseDetector] Running form detector`);
     const formResult = this.formDetector.detect(context);
+    if (formResult && formResult.detected) {
+      this.logger.info(`[PurchaseDetector] Form detection: fields=${formResult.metadata?.formFields?.join(',') || 'unknown'}, confidence=${formResult.confidence}`);
+    }
 
     // Combine results
+    const validDetections = [domainResult, urlResult, formResult].filter((r): r is DetectionResult => r !== null && r.detected);
+    if (validDetections.length === 0) {
+      this.logger.debug(`[PurchaseDetector] No detections found`);
+    } else {
+      this.logger.debug(`[PurchaseDetector] Combining ${validDetections.length} detections`);
+      if (validDetections.length > 1) {
+        this.logger.info(`[PurchaseDetector] Confidence boost: multiple sub-detectors triggered (${validDetections.length})`);
+      }
+    }
+
     let result = combineResults([domainResult, urlResult, formResult], this.config.severity);
 
     // If purchase detected and spend limits configured, check limits
     if (result.detected && this.config.spendLimits) {
+      this.logger.debug(`[PurchaseDetector] Checking spend limits`);
       result = this.checkSpendLimits(result, context);
     }
 
+    this.logger.debug(`[PurchaseDetector] Detection complete: detected=${result.detected}, confidence=${result.confidence}`);
     return result;
   }
 
@@ -173,8 +205,8 @@ export class PurchaseDetectorImpl implements IPurchaseDetector {
     }
 
     // Try to extract amount from the tool input
-    const amount = extractAmountFromInput(context.toolInput);
-    
+    const amount = extractAmountFromInput(context.toolInput, this.logger);
+
     // If no amount found, use per-transaction limit as the assumed amount
     // This is a security-first approach - assume worst case if unknown
     const effectiveAmount = amount ?? limits.perTransaction;
@@ -250,7 +282,7 @@ export class PurchaseDetectorImpl implements IPurchaseDetector {
 /**
  * Create a purchase detector from PurchaseRule configuration
  */
-export function createPurchaseDetector(rule: PurchaseRule, spendTracker?: SpendTracker): PurchaseDetectorImpl {
+export function createPurchaseDetector(rule: PurchaseRule, spendTracker?: SpendTracker, logger?: Logger): PurchaseDetectorImpl {
   const config: PurchaseDetectorConfig = {
     enabled: rule.enabled,
     severity: rule.severity,
@@ -265,7 +297,7 @@ export function createPurchaseDetector(rule: PurchaseRule, spendTracker?: SpendT
     } : undefined,
   };
   
-  return new PurchaseDetectorImpl(config, spendTracker);
+  return new PurchaseDetectorImpl(config, spendTracker, logger);
 }
 
 /**

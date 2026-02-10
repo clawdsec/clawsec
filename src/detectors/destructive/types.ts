@@ -62,14 +62,20 @@ export interface DestructiveDetectorConfig {
   /** Shell command protection settings */
   shell?: {
     enabled: boolean;
+    /** Custom regex patterns for shell command detection */
+    patterns?: string[];
   };
   /** Cloud operation protection settings */
   cloud?: {
     enabled: boolean;
+    /** Custom regex patterns for cloud operation detection */
+    patterns?: string[];
   };
   /** Code pattern protection settings */
   code?: {
     enabled: boolean;
+    /** Custom regex patterns for code pattern detection */
+    patterns?: string[];
   };
 }
 

@@ -15,6 +15,8 @@ import type {
   WebsiteDetector as IWebsiteDetector,
   WebsiteDetectorConfig,
 } from './types.js';
+import { createLogger, type Logger } from '../../utils/logger.js';
+
 import { 
   extractDomain, 
   extractUrlFromContext, 
@@ -68,32 +70,42 @@ function noDetection(severity: Severity, mode: FilterMode): WebsiteDetectionResu
  */
 export class WebsiteDetectorImpl implements IWebsiteDetector {
   private config: WebsiteDetectorConfig;
+  private logger: Logger;
 
-  constructor(config: WebsiteDetectorConfig) {
+  constructor(config: WebsiteDetectorConfig, logger?: Logger) {
     this.config = config;
+    this.logger = logger ?? createLogger(null, null);
   }
 
   async detect(context: DetectionContext): Promise<WebsiteDetectionResult> {
+    this.logger.debug(`[WebsiteDetector] Starting detection: tool=${context.toolName}`);
+
     // Check if detector is enabled
     if (!this.config.enabled) {
+      this.logger.debug(`[WebsiteDetector] Detector disabled`);
       return noDetection(this.config.severity, this.config.mode);
     }
 
     // Extract URL from context
     const url = extractUrlFromContext(context);
     if (!url) {
+      this.logger.debug(`[WebsiteDetector] No URL found in context`);
       return noDetection(this.config.severity, this.config.mode);
     }
 
     // Extract domain from URL
     const domain = extractDomain(url);
     if (!domain) {
+      this.logger.debug(`[WebsiteDetector] Could not extract domain from URL: ${url}`);
       return noDetection(this.config.severity, this.config.mode);
     }
+
+    this.logger.debug(`[WebsiteDetector] Checking domain: ${domain} (mode: ${this.config.mode})`);
 
     // First, check for dangerous categories (malware, phishing) regardless of mode
     const categoryResult = detectCategory(domain);
     if (categoryResult.detected && categoryResult.category && isDangerousCategory(categoryResult.category)) {
+      this.logger.info(`[WebsiteDetector] Dangerous category detected: ${categoryResult.category}, confidence=${categoryResult.confidence}`);
       return {
         detected: true,
         category: 'website',
@@ -111,11 +123,19 @@ export class WebsiteDetectorImpl implements IWebsiteDetector {
     }
 
     // Apply mode-based filtering
-    if (this.config.mode === 'allowlist') {
-      return this.checkAllowlistMode(url, domain, categoryResult);
+    this.logger.debug(`[WebsiteDetector] Applying ${this.config.mode} mode filtering`);
+    const result = this.config.mode === 'allowlist'
+      ? this.checkAllowlistMode(url, domain, categoryResult)
+      : this.checkBlocklistMode(url, domain, categoryResult);
+
+    if (result.detected) {
+      this.logger.info(`[WebsiteDetector] Detection: domain=${domain}, confidence=${result.confidence}, reason="${result.reason}"`);
     } else {
-      return this.checkBlocklistMode(url, domain, categoryResult);
+      this.logger.debug(`[WebsiteDetector] No detection: domain=${domain} is allowed`);
     }
+
+    this.logger.debug(`[WebsiteDetector] Detection complete: detected=${result.detected}`);
+    return result;
   }
 
   /**
@@ -263,7 +283,7 @@ export class WebsiteDetectorImpl implements IWebsiteDetector {
 /**
  * Create a website detector from WebsiteRule configuration
  */
-export function createWebsiteDetector(rule: WebsiteRule): WebsiteDetectorImpl {
+export function createWebsiteDetector(rule: WebsiteRule, logger?: Logger): WebsiteDetectorImpl {
   const config: WebsiteDetectorConfig = {
     enabled: rule.enabled,
     mode: rule.mode,
@@ -273,7 +293,7 @@ export function createWebsiteDetector(rule: WebsiteRule): WebsiteDetectorImpl {
     allowlist: rule.allowlist,
   };
   
-  return new WebsiteDetectorImpl(config);
+  return new WebsiteDetectorImpl(config, logger);
 }
 
 /**
