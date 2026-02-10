@@ -40,7 +40,12 @@
       },
       "logLevel": {
         "type": "string",
-        "enum": ["debug", "info", "warn", "error"],
+        "enum": [
+          "debug",
+          "info",
+          "warn",
+          "error"
+        ],
         "default": "info",
         "description": "Logging verbosity level"
       }

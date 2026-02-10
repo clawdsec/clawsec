@@ -33,7 +33,9 @@
   "author": "Clawsec Team",
   "license": "MIT",
   "openclaw": {
-    "extensions": ["./dist/src/index.js"]
+    "extensions": [
+      "./dist/src/index.js"
+    ]
   },
   "engines": {
     "node": ">=18.0.0"
