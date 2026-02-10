@@ -170,6 +170,8 @@ export type WebsiteRule = z.infer<typeof WebsiteRuleSchema>;
 export const ShellProtectionSchema = z.object({
   /** Whether shell command protection is enabled */
   enabled: z.boolean().default(true),
+  /** Custom regex patterns for shell command detection */
+  patterns: z.array(z.string()).optional(),
 }).default(() => ({ enabled: true }));
 export type ShellProtection = z.infer<typeof ShellProtectionSchema>;
 
@@ -179,6 +181,8 @@ export type ShellProtection = z.infer<typeof ShellProtectionSchema>;
 export const CloudProtectionSchema = z.object({
   /** Whether cloud operation protection is enabled */
   enabled: z.boolean().default(true),
+  /** Custom regex patterns for cloud operation detection */
+  patterns: z.array(z.string()).optional(),
 }).default(() => ({ enabled: true }));
 export type CloudProtection = z.infer<typeof CloudProtectionSchema>;
 
@@ -188,6 +192,8 @@ export type CloudProtection = z.infer<typeof CloudProtectionSchema>;
 export const CodeProtectionSchema = z.object({
   /** Whether code pattern protection is enabled */
   enabled: z.boolean().default(true),
+  /** Custom regex patterns for code pattern detection */
+  patterns: z.array(z.string()).optional(),
 }).default(() => ({ enabled: true }));
 export type CodeProtection = z.infer<typeof CodeProtectionSchema>;
 
@@ -291,6 +297,8 @@ export const SecretsRuleSchema = z.object({
   severity: SeveritySchema.default('critical'),
   /** Action to take when secrets are detected */
   action: ActionSchema.default('block'),
+  /** Custom regex patterns for secrets detection */
+  patterns: z.array(z.string()).optional(),
 }).default(() => ({
   enabled: true,
   severity: 'critical' as const,
@@ -312,6 +320,8 @@ export const ExfiltrationRuleSchema = z.object({
   severity: SeveritySchema.default('high'),
   /** Action to take when exfiltration is detected */
   action: ActionSchema.default('block'),
+  /** Custom regex patterns for exfiltration detection */
+  patterns: z.array(z.string()).optional(),
 }).default(() => ({
   enabled: true,
   severity: 'high' as const,
@@ -519,6 +529,8 @@ export type ApprovalConfig = z.infer<typeof ApprovalConfigSchema>;
 export const ClawsecConfigSchema = z.object({
   /** Configuration version */
   version: z.string().default('1.0'),
+  /** Template inheritance - list of builtin or custom templates to extend */
+  extends: z.array(z.string()).optional(),
   /** Global plugin settings */
   global: GlobalConfigSchema.optional().default(() => ({
     enabled: true,
