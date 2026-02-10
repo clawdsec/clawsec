@@ -212,8 +212,8 @@ describe('BeforeToolCallHandler', () => {
 
       const result = await handler(context);
 
-      expect(result.allow).toBe(true);
-      expect(result.blockMessage).toBeUndefined();
+      expect(result.block).toBe(false);
+      expect(result.blockReason).toBeUndefined();
       expect(mockAnalyzer.analyze).toHaveBeenCalledTimes(1);
     });
 
@@ -230,8 +230,8 @@ describe('BeforeToolCallHandler', () => {
 
       const result = await handler(context);
 
-      expect(result.allow).toBe(true);
-      expect(result.modifiedInput).toBeUndefined();
+      expect(result.block).toBe(false);
+      expect(result.params).toBeUndefined();
     });
   });
 
@@ -270,8 +270,8 @@ describe('BeforeToolCallHandler', () => {
 
       const result = await handler(context);
 
-      expect(result.allow).toBe(false);
-      expect(result.blockMessage).toBe('Blocked: destructive command detected');
+      expect(result.block).toBe(true);
+      expect(result.blockReason).toBe('Blocked: destructive command detected');
       expect(result.metadata?.category).toBe('destructive');
       expect(result.metadata?.severity).toBe('critical');
       expect(result.metadata?.reason).toBe('Detected rm -rf / command');
@@ -306,7 +306,7 @@ describe('BeforeToolCallHandler', () => {
 
       const result = await handler(context);
 
-      expect(result.allow).toBe(false);
+      expect(result.block).toBe(true);
       expect(result.metadata?.category).toBe('secrets');
       expect(result.metadata?.rule).toBe('api-key-detection');
     });
@@ -339,7 +339,7 @@ describe('BeforeToolCallHandler', () => {
 
       const result = await handler(context);
 
-      expect(result.allow).toBe(false);
+      expect(result.block).toBe(true);
       expect(result.metadata?.category).toBe('exfiltration');
     });
   });
@@ -384,12 +384,12 @@ describe('BeforeToolCallHandler', () => {
 
       const result = await handler(context);
 
-      expect(result.allow).toBe(false);
-      expect(result.blockMessage).toContain('Approval required');
-      expect(result.blockMessage).toContain('approval-123');
-      expect(result.blockMessage).toContain('300s');
-      expect(result.blockMessage).toContain('native');
-      expect(result.blockMessage).toContain('agent-confirm');
+      expect(result.block).toBe(true);
+      expect(result.blockReason).toContain('Approval required');
+      expect(result.blockReason).toContain('approval-123');
+      expect(result.blockReason).toContain('300s');
+      expect(result.blockReason).toContain('native');
+      expect(result.blockReason).toContain('agent-confirm');
     });
 
     it('should include approval instructions in block message', async () => {
@@ -421,9 +421,9 @@ describe('BeforeToolCallHandler', () => {
 
       const result = await handler(context);
 
-      expect(result.blockMessage).toContain('Approval ID: test-approval-id');
-      expect(result.blockMessage).toContain('Timeout: 120s');
-      expect(result.blockMessage).toContain('Methods: webhook');
+      expect(result.blockReason).toContain('Approval ID: test-approval-id');
+      expect(result.blockReason).toContain('Timeout: 120s');
+      expect(result.blockReason).toContain('Methods: webhook');
     });
   });
 
@@ -462,7 +462,7 @@ describe('BeforeToolCallHandler', () => {
 
       const result = await handler(context);
 
-      expect(result.allow).toBe(true);
+      expect(result.block).toBe(false);
       expect(mockExecutor.execute).toHaveBeenCalled();
     });
   });
@@ -494,8 +494,8 @@ describe('BeforeToolCallHandler', () => {
 
       const result = await handler(context);
 
-      expect(result.allow).toBe(true);
-      expect(result.modifiedInput).toEqual({ command: 'rm -rf ./temp' });
+      expect(result.block).toBe(false);
+      expect(result.params).toEqual({ command: 'rm -rf ./temp' });
       // Analyzer should NOT be called when agent-confirm is valid
       expect(mockAnalyzer.analyze).not.toHaveBeenCalled();
     });
@@ -526,8 +526,8 @@ describe('BeforeToolCallHandler', () => {
 
       const result = await handler(context);
 
-      expect(result.allow).toBe(false);
-      expect(result.blockMessage).toBe('Approval not found or expired');
+      expect(result.block).toBe(true);
+      expect(result.blockReason).toBe('Approval not found or expired');
       // Analyzer should NOT be called when agent-confirm is present (even if invalid)
       expect(mockAnalyzer.analyze).not.toHaveBeenCalled();
     });
@@ -551,7 +551,7 @@ describe('BeforeToolCallHandler', () => {
 
       const result = await handler(context);
 
-      expect(result.allow).toBe(true);
+      expect(result.block).toBe(false);
       expect(mockAnalyzer.analyze).toHaveBeenCalledTimes(1);
     });
 
@@ -638,7 +638,7 @@ describe('BeforeToolCallHandler', () => {
 
       const result = await handler(context);
 
-      expect(result.allow).toBe(true);
+      expect(result.block).toBe(false);
       expect(mockAnalyzer.analyze).not.toHaveBeenCalled();
     });
 
@@ -702,7 +702,7 @@ describe('BeforeToolCallHandler', () => {
 
       const result = await handler(context);
 
-      expect(result.allow).toBe(false);
+      expect(result.block).toBe(true);
       expect(result.metadata?.category).toBe('destructive');
       expect(result.metadata?.severity).toBe('critical');
       expect(result.metadata?.reason).toBe('Critical: rm -rf command');
@@ -732,7 +732,7 @@ describe('BeforeToolCallHandler', () => {
 
       const result = await handler(context);
 
-      expect(result.allow).toBe(false);
+      expect(result.block).toBe(true);
       expect(result.metadata).toBeUndefined();
     });
   });
@@ -812,7 +812,7 @@ describe('BeforeToolCallHandler', () => {
       const result = await handler(context);
 
       // Should return a valid result
-      expect(result).toHaveProperty('allow');
+      expect(result).toHaveProperty('block');
     });
   });
 
@@ -836,7 +836,7 @@ describe('BeforeToolCallHandler', () => {
 
       const result = await handler(context);
 
-      expect(result.allow).toBe(true);
+      expect(result.block).toBe(false);
     });
 
     it('should handle analyzer errors gracefully', async () => {
@@ -852,7 +852,9 @@ describe('BeforeToolCallHandler', () => {
       });
       const context = createTestToolCallContext();
 
-      await expect(handler(context)).rejects.toThrow('Analyzer failed');
+      // With error handling, errors are caught and handler returns allow (fail-open)
+      const result = await handler(context);
+      expect(result.block).toBe(false); // Fail-open on error
     });
 
     it('should handle executor errors gracefully', async () => {
@@ -875,7 +877,9 @@ describe('BeforeToolCallHandler', () => {
       });
       const context = createTestToolCallContext();
 
-      await expect(handler(context)).rejects.toThrow('Executor failed');
+      // With error handling, errors are caught and handler returns allow (fail-open)
+      const result = await handler(context);
+      expect(result.block).toBe(false); // Fail-open on error
     });
 
     it('should handle log action', async () => {
@@ -905,7 +909,7 @@ describe('BeforeToolCallHandler', () => {
 
       const result = await handler(context);
 
-      expect(result.allow).toBe(true);
+      expect(result.block).toBe(false);
     });
   });
 });

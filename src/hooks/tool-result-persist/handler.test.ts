@@ -522,12 +522,12 @@ describe('ToolResultPersistHandler', () => {
 
       const result = await handler(context);
 
-      expect(result.allow).toBe(true);
-      expect(result.filteredOutput).toBe(
+      expect(result.message).toBeDefined();
+      expect(result.message.content).toBe(
         'The API key is [REDACTED:openai-api-key]'
       );
-      expect(result.redactions).toBeDefined();
-      expect(result.redactions?.some((r) => r.type === 'openai-api-key')).toBe(true);
+      expect(result.message.redactions).toBeDefined();
+      expect(result.message.redactions?.some((r) => r.type === 'openai-api-key')).toBe(true);
     });
 
     it('should redact SSN in string output', async () => {
@@ -539,9 +539,9 @@ describe('ToolResultPersistHandler', () => {
 
       const result = await handler(context);
 
-      expect(result.allow).toBe(true);
-      expect(result.filteredOutput).toBe('User SSN: [REDACTED:ssn]');
-      expect(result.redactions?.some((r) => r.type === 'ssn')).toBe(true);
+      expect(result.message).toBeDefined();
+      expect(result.message.content).toBe('User SSN: [REDACTED:ssn]');
+      expect(result.message.redactions?.some((r) => r.type === 'ssn')).toBe(true);
     });
 
     it('should redact JWT token in string output', async () => {
@@ -554,8 +554,8 @@ describe('ToolResultPersistHandler', () => {
 
       const result = await handler(context);
 
-      expect(result.allow).toBe(true);
-      expect(result.filteredOutput).toContain('[REDACTED:jwt]');
+      expect(result.message).toBeDefined();
+      expect(result.message.content).toContain('[REDACTED:jwt]');
     });
   });
 
@@ -574,8 +574,8 @@ describe('ToolResultPersistHandler', () => {
 
       const result = await handler(context);
 
-      expect(result.allow).toBe(true);
-      const filtered = result.filteredOutput as {
+      expect(result.message).toBeDefined();
+      const filtered = result.message.content as {
         user: string;
         credentials: { apiKey: string };
       };
@@ -600,8 +600,8 @@ describe('ToolResultPersistHandler', () => {
 
       const result = await handler(context);
 
-      expect(result.allow).toBe(true);
-      const filtered = result.filteredOutput as {
+      expect(result.message).toBeDefined();
+      const filtered = result.message.content as {
         level1: { level2: { level3: { secret: string } } };
       };
       expect(filtered.level1.level2.level3.secret).toBe('[REDACTED:aws-access-key]');
@@ -618,9 +618,7 @@ describe('ToolResultPersistHandler', () => {
 
       const result = await handler(context);
 
-      expect(result.allow).toBe(true);
-      expect(result.filteredOutput).toBeUndefined();
-      expect(result.redactions).toBeUndefined();
+      expect(result).toEqual({});
     });
 
     it('should pass through clean object output unchanged', async () => {
@@ -636,9 +634,7 @@ describe('ToolResultPersistHandler', () => {
 
       const result = await handler(context);
 
-      expect(result.allow).toBe(true);
-      expect(result.filteredOutput).toBeUndefined();
-      expect(result.redactions).toBeUndefined();
+      expect(result).toEqual({});
     });
 
     it('should pass through primitive outputs unchanged', async () => {
@@ -649,22 +645,19 @@ describe('ToolResultPersistHandler', () => {
       let result = await handler(
         createTestToolResultContext({ toolOutput: 42 })
       );
-      expect(result.allow).toBe(true);
-      expect(result.filteredOutput).toBeUndefined();
+      expect(result).toEqual({});
 
       // Boolean
       result = await handler(
         createTestToolResultContext({ toolOutput: true })
       );
-      expect(result.allow).toBe(true);
-      expect(result.filteredOutput).toBeUndefined();
+      expect(result).toEqual({});
 
       // Null
       result = await handler(
         createTestToolResultContext({ toolOutput: null })
       );
-      expect(result.allow).toBe(true);
-      expect(result.filteredOutput).toBeUndefined();
+      expect(result).toEqual({});
     });
   });
 
@@ -682,14 +675,14 @@ describe('ToolResultPersistHandler', () => {
 
       const result = await handler(context);
 
-      expect(result.allow).toBe(true);
-      const filtered = result.filteredOutput as Record<string, string>;
+      expect(result.message).toBeDefined();
+      const filtered = result.message.content as Record<string, string>;
       expect(filtered.openaiKey).toBe('[REDACTED:openai-api-key]');
       expect(filtered.awsKey).toBe('[REDACTED:aws-access-key]');
       expect(filtered.userSsn).toBe('[REDACTED:ssn]');
 
       // Should have redactions for each type
-      expect(result.redactions?.length).toBeGreaterThanOrEqual(3);
+      expect(result.message.redactions?.length).toBeGreaterThanOrEqual(3);
     });
 
     it('should handle array with multiple secrets', async () => {
@@ -705,8 +698,8 @@ describe('ToolResultPersistHandler', () => {
 
       const result = await handler(context);
 
-      expect(result.allow).toBe(true);
-      const filtered = result.filteredOutput as string[];
+      expect(result.message).toBeDefined();
+      const filtered = result.message.content as string[];
       expect(filtered[0]).toBe('[REDACTED:openai-api-key]');
       expect(filtered[1]).toBe('[REDACTED:aws-access-key]');
       expect(filtered[2]).toBe('clean data');
@@ -723,8 +716,9 @@ describe('ToolResultPersistHandler', () => {
 
       const result = await handler(context);
 
-      expect(result.redactions).toBeDefined();
-      const openaiRedaction = result.redactions?.find(
+      expect(result.message).toBeDefined();
+      expect(result.message.redactions).toBeDefined();
+      const openaiRedaction = result.message.redactions?.find(
         (r) => r.type === 'openai-api-key'
       );
       expect(openaiRedaction).toBeDefined();
@@ -744,7 +738,8 @@ describe('ToolResultPersistHandler', () => {
       const result = await handler(context);
 
       // Should only have one redaction entry for openai-api-key type
-      const openaiRedactions = result.redactions?.filter(
+      expect(result.message).toBeDefined();
+      const openaiRedactions = result.message.redactions?.filter(
         (r) => r.type === 'openai-api-key'
       );
       expect(openaiRedactions?.length).toBe(1);
@@ -761,9 +756,7 @@ describe('ToolResultPersistHandler', () => {
 
       const result = await handler(context);
 
-      expect(result.allow).toBe(true);
-      expect(result.filteredOutput).toBeUndefined();
-      expect(result.redactions).toBeUndefined();
+      expect(result).toEqual({});
     });
   });
 
@@ -779,9 +772,7 @@ describe('ToolResultPersistHandler', () => {
 
       const result = await handler(context);
 
-      expect(result.allow).toBe(true);
-      expect(result.filteredOutput).toBeUndefined();
-      expect(result.redactions).toBeUndefined();
+      expect(result).toEqual({});
     });
 
     it('should pass through when secrets rule is disabled', async () => {
@@ -798,9 +789,7 @@ describe('ToolResultPersistHandler', () => {
 
       const result = await handler(context);
 
-      expect(result.allow).toBe(true);
-      expect(result.filteredOutput).toBeUndefined();
-      expect(result.redactions).toBeUndefined();
+      expect(result).toEqual({});
     });
   });
 
@@ -817,8 +806,7 @@ describe('ToolResultPersistHandler', () => {
 
       const result = await handler(context);
 
-      expect(result).toHaveProperty('allow');
-      expect(result.allow).toBe(true);
+      expect(result).toEqual({});
     });
 
     it('should redact secrets with default config', async () => {
@@ -829,8 +817,8 @@ describe('ToolResultPersistHandler', () => {
 
       const result = await handler(context);
 
-      expect(result.allow).toBe(true);
-      expect(result.filteredOutput).toBe('[REDACTED:openai-api-key]');
+      expect(result.message).toBeDefined();
+      expect(result.message.content).toBe('[REDACTED:openai-api-key]');
     });
   });
 
@@ -844,8 +832,7 @@ describe('ToolResultPersistHandler', () => {
 
       const result = await handler(context);
 
-      expect(result.allow).toBe(true);
-      expect(result.filteredOutput).toBeUndefined();
+      expect(result).toEqual({});
     });
 
     it('should handle empty object output', async () => {
@@ -857,8 +844,7 @@ describe('ToolResultPersistHandler', () => {
 
       const result = await handler(context);
 
-      expect(result.allow).toBe(true);
-      expect(result.filteredOutput).toBeUndefined();
+      expect(result).toEqual({});
     });
 
     it('should handle empty array output', async () => {
@@ -870,8 +856,7 @@ describe('ToolResultPersistHandler', () => {
 
       const result = await handler(context);
 
-      expect(result.allow).toBe(true);
-      expect(result.filteredOutput).toBeUndefined();
+      expect(result).toEqual({});
     });
 
     it('should handle undefined output', async () => {
@@ -883,8 +868,7 @@ describe('ToolResultPersistHandler', () => {
 
       const result = await handler(context);
 
-      expect(result.allow).toBe(true);
-      expect(result.filteredOutput).toBeUndefined();
+      expect(result).toEqual({});
     });
 
     it('should handle mixed clean and secret values in complex structure', async () => {
@@ -912,8 +896,8 @@ describe('ToolResultPersistHandler', () => {
 
       const result = await handler(context);
 
-      expect(result.allow).toBe(true);
-      const filtered = result.filteredOutput as {
+      expect(result.message).toBeDefined();
+      const filtered = result.message.content as {
         meta: { status: string; count: number };
         items: Array<{ id: number; value: string }>;
         timestamp: number;
@@ -940,8 +924,8 @@ describe('ToolResultPersistHandler', () => {
 
       const result = await handler(context);
 
-      expect(result.allow).toBe(true);
-      expect(result.filteredOutput).toContain('[REDACTED:google-api-key]');
+      expect(result.message).toBeDefined();
+      expect(result.message.content).toContain('[REDACTED:google-api-key]');
     });
 
     it('should redact Slack token', async () => {
@@ -953,8 +937,8 @@ describe('ToolResultPersistHandler', () => {
 
       const result = await handler(context);
 
-      expect(result.allow).toBe(true);
-      expect(result.filteredOutput).toContain('[REDACTED:slack-token]');
+      expect(result.message).toBeDefined();
+      expect(result.message.content).toContain('[REDACTED:slack-token]');
     });
 
     it('should redact Stripe test key', async () => {
@@ -966,8 +950,8 @@ describe('ToolResultPersistHandler', () => {
 
       const result = await handler(context);
 
-      expect(result.allow).toBe(true);
-      expect(result.filteredOutput).toContain('[REDACTED:stripe-test-key]');
+      expect(result.message).toBeDefined();
+      expect(result.message.content).toContain('[REDACTED:stripe-test-key]');
     });
 
     it('should redact Bearer token', async () => {
@@ -979,8 +963,8 @@ describe('ToolResultPersistHandler', () => {
 
       const result = await handler(context);
 
-      expect(result.allow).toBe(true);
-      expect(result.filteredOutput).toContain('[REDACTED:bearer-token]');
+      expect(result.message).toBeDefined();
+      expect(result.message.content).toContain('[REDACTED:bearer-token]');
     });
 
     it('should redact Visa credit card', async () => {
@@ -992,8 +976,8 @@ describe('ToolResultPersistHandler', () => {
 
       const result = await handler(context);
 
-      expect(result.allow).toBe(true);
-      expect(result.filteredOutput).toContain('[REDACTED:credit-card]');
+      expect(result.message).toBeDefined();
+      expect(result.message.content).toContain('[REDACTED:credit-card]');
     });
 
     it('should redact Mastercard credit card', async () => {
@@ -1005,8 +989,66 @@ describe('ToolResultPersistHandler', () => {
 
       const result = await handler(context);
 
-      expect(result.allow).toBe(true);
-      expect(result.filteredOutput).toContain('[REDACTED:credit-card]');
+      expect(result.message).toBeDefined();
+      expect(result.message.content).toContain('[REDACTED:credit-card]');
+    });
+  });
+
+  describe('Edge cases with undefined toolInput', () => {
+    it('should handle undefined toolInput without throwing', async () => {
+      const config = createTestConfig();
+      const handler = createToolResultPersistHandler(config);
+
+      // Simulate a context where toolInput is undefined (possible at runtime)
+      const context: ToolResultContext = {
+        toolName: 'some_tool',
+        toolInput: undefined as any, // Force undefined despite type
+        toolOutput: 'sk-abcdefghijklmnopqrstuvwxyz1234567890abcdefghijklmno',
+      };
+
+      // Should not throw the "Cannot use 'in' operator to search for 'command' in undefined" error
+      const result = await handler(context);
+
+      // Should still filter the output
+      expect(result.message).toBeDefined();
+      expect(result.message.content).toContain('[REDACTED:openai-api-key]');
+      expect(result.message.redactions).toBeDefined();
+      expect(result.message.redactions.length).toBeGreaterThan(0);
+    });
+
+    it('should handle null toolInput without throwing', async () => {
+      const config = createTestConfig();
+      const handler = createToolResultPersistHandler(config);
+
+      const context: ToolResultContext = {
+        toolName: 'some_tool',
+        toolInput: null as any, // Force null despite type
+        toolOutput: 'password=supersecret123',
+      };
+
+      // Should not throw
+      const result = await handler(context);
+
+      // Should still filter the output
+      expect(result.message).toBeDefined();
+      expect(result.message.content).toContain('[REDACTED:');
+    });
+
+    it('should handle empty object toolInput', async () => {
+      const config = createTestConfig();
+      const handler = createToolResultPersistHandler(config);
+
+      const context: ToolResultContext = {
+        toolName: 'some_tool',
+        toolInput: {},
+        toolOutput: 'AKIA1234567890EXAMPLE',
+      };
+
+      // Should work normally
+      const result = await handler(context);
+
+      expect(result.message).toBeDefined();
+      expect(result.message.content).toContain('[REDACTED:aws-access-key]');
     });
   });
 });
