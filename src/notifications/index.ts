@@ -3,6 +3,8 @@
  * Unified notification system for security events
  */
 
+import { randomUUID } from 'node:crypto';
+
 export * from './types.js';
 export { createSlackSender } from './slack.js';
 export { createDiscordSender } from './discord.js';
@@ -103,7 +105,7 @@ export function createSecurityEvent(params: {
   metadata?: Record<string, unknown>;
 }): SecurityEventPayload {
   return {
-    eventId: crypto.randomUUID(),
+    eventId: randomUUID(),
     timestamp: Date.now(),
     ...params,
   };
