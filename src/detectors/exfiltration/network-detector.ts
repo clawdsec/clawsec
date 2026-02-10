@@ -61,26 +61,26 @@ const NETCAT_PATTERNS = [
 const DEV_TCP_PATTERNS = [
   // exec /dev/tcp (check first as it's most critical)
   {
-    pattern: /\bexec\s+\d+<>\/dev\/tcp\/([^\/]+)\/(\d+)/i,
+    pattern: /\bexec\s+\d+<>\/dev\/tcp\/([^/]+)\/(\d+)/i,
     tool: '/dev/tcp',
     description: 'bash TCP file descriptor',
     critical: true,
   },
   // Redirecting to /dev/tcp
   {
-    pattern: />\s*\/dev\/tcp\/([^\/]+)\/(\d+)/i,
+    pattern: />\s*\/dev\/tcp\/([^/]+)\/(\d+)/i,
     tool: '/dev/tcp',
     description: 'bash TCP redirect (outbound)',
   },
   // Reading and sending via /dev/tcp
   {
-    pattern: /\bcat\s+([^\s]+)\s*>\s*\/dev\/tcp\/([^\/]+)\/(\d+)/i,
+    pattern: /\bcat\s+([^\s]+)\s*>\s*\/dev\/tcp\/([^/]+)\/(\d+)/i,
     tool: '/dev/tcp',
     description: 'file sent via bash TCP',
   },
   // /dev/udp patterns
   {
-    pattern: />\s*\/dev\/udp\/([^\/]+)\/(\d+)/i,
+    pattern: />\s*\/dev\/udp\/([^/]+)\/(\d+)/i,
     tool: '/dev/udp',
     description: 'bash UDP redirect (outbound)',
   },
@@ -196,7 +196,7 @@ const DNS_EXFIL_PATTERNS = [
 const OTHER_NETWORK_PATTERNS = [
   // xxd/hexdump to network
   {
-    pattern: /\b(?:xxd|hexdump)\s+[^\|]+\|\s*(?:nc|netcat|ncat|curl)/i,
+    pattern: /\b(?:xxd|hexdump)\s+[^|]+\|\s*(?:nc|netcat|ncat|curl)/i,
     tool: 'hex-encoded',
     description: 'hex-encoded network exfiltration',
   },

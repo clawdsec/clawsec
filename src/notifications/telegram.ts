@@ -25,7 +25,7 @@ const SEVERITY_EMOJI: Record<Severity, string> = {
  * Escape special characters for Telegram MarkdownV2
  */
 function escapeMarkdownV2(text: string): string {
-  return text.replace(/[_*\[\]()~`>#+=|{}.!-]/g, '\\$&');
+  return text.replace(/[_*[\]()~`>#+=|{}.!-]/g, '\\$&');
 }
 
 /**

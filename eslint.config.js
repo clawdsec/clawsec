@@ -6,6 +6,7 @@ export default tseslint.config(
   ...tseslint.configs.recommended,
   {
     files: ['src/**/*.ts'],
+    ignores: ['**/*.test.ts'],
     languageOptions: {
       parserOptions: {
         project: './tsconfig.json',
@@ -19,6 +20,6 @@ export default tseslint.config(
     },
   },
   {
-    ignores: ['dist/**', 'node_modules/**', '*.config.js'],
+    ignores: ['dist/**', 'node_modules/**', '*.config.js', '**/*.test.ts'],
   }
 );

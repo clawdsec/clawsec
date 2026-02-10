@@ -208,6 +208,7 @@ export class DefaultAgentConfirmHandler implements AgentConfirmHandler {
     }
 
     // Create a shallow copy without the confirm parameter
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const { [paramName]: _, ...cleanedInput } = toolInput;
     return cleanedInput;
   }

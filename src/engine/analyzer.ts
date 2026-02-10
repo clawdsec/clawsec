@@ -143,11 +143,12 @@ function determineAction(
         return { action: 'warn', requiresLLM: llmEnabled && isAmbiguous };
       }
 
-    case 'medium':
+    case 'medium': {
       // Medium severity -> warn
       // May need LLM if confidence is ambiguous
       const isAmbiguousMedium = confidence >= 0.5 && confidence <= 0.8;
       return { action: 'warn', requiresLLM: llmEnabled && isAmbiguousMedium };
+    }
 
     case 'low':
       // Low severity -> allow with logging
